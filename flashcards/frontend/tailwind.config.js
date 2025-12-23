@@ -1,0 +1,60 @@
+const { nextui } = require("@nextui-org/react");
+
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "../node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}"
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"]
+      }
+    }
+  },
+  darkMode: "class",
+  plugins: [
+    nextui({
+      themes: {
+        light: {
+          colors: {
+            background: "#FFFFFF",
+            foreground: "#1f2937",
+            primary: {
+              50: "#eff6ff",
+              100: "#dbeafe",
+              200: "#bfdbfe",
+              300: "#93c5fd",
+              400: "#60a5fa",
+              500: "#3b82f6",
+              600: "#2563eb",
+              700: "#1d4ed8",
+              800: "#1e40af",
+              900: "#1e3a8a",
+              DEFAULT: "#3b82f6",
+              foreground: "#FFFFFF",
+            },
+            secondary: {
+              50: "#eef2ff",
+              100: "#e0e7ff",
+              200: "#c7d2fe",
+              300: "#a5b4fc",
+              400: "#818cf8",
+              500: "#6366f1",
+              600: "#4f46e5",
+              700: "#4338ca",
+              800: "#3730a3",
+              900: "#312e81",
+              DEFAULT: "#6366f1",
+              foreground: "#FFFFFF",
+            },
+            focus: "#3b82f6",
+          },
+        },
+      },
+    }),
+  ],
+};

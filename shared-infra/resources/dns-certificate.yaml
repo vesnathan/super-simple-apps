@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Shared DNS and Wildcard Certificate for Super Simple Apps"
+
+# IMPORTANT: Deploy this stack to us-east-1 (required for CloudFront/Cognito certificates)
+
+Parameters:
+  RootDomainName:
+    Type: String
+    Description: Root domain name (e.g., super-simple-apps.com)
+    Default: "super-simple-apps.com"
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for the root domain
+
+Resources:
+  # Wildcard SSL Certificate for *.super-simple-apps.com
+  # This single certificate covers ALL subdomains
+  WildcardCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "*.${RootDomainName}"
+      SubjectAlternativeNames:
+        - !Ref RootDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub "*.${RootDomainName}"
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Project
+          Value: super-simple-apps
+
+Outputs:
+  WildcardCertificateArn:
+    Description: "ARN of the wildcard ACM certificate (use for all app CloudFront distributions)"
+    Value: !Ref WildcardCertificate
+    Export:
+      Name: SuperSimpleApps-WildcardCertificateArn
+
+  RootDomainName:
+    Description: "Root domain name"
+    Value: !Ref RootDomainName
+    Export:
+      Name: SuperSimpleApps-RootDomainName
+
+  HostedZoneId:
+    Description: "Route53 Hosted Zone ID"
+    Value: !Ref HostedZoneId
+    Export:
+      Name: SuperSimpleApps-HostedZoneId

@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./frontend/src/*"],
+      "@/types/*": ["./types/*"],
+      "@/components/*": ["./frontend/src/components/*"],
+      "@/stores/*": ["./frontend/src/stores/*"],
+      "@/services/*": ["./frontend/src/services/*"]
+    }
+  }
+}

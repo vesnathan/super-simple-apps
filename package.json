@@ -1,0 +1,21 @@
+{
+  "name": "super-simple-apps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Super Simple Apps - A collection of simple, useful web applications",
+  "workspaces": [
+    "shared-infra",
+    "flashcards",
+    "flashcards/frontend",
+    "flashcards/backend",
+    "flashcards/deploy"
+  ],
+  "scripts": {
+    "deploy:shared-infra:prod": "cd shared-infra && yarn deploy:prod",
+    "deploy:flashcards:dev": "cd flashcards && yarn deploy:dev",
+    "deploy:flashcards:prod": "cd flashcards && yarn deploy:prod"
+  },
+  "keywords": ["flashcards", "education", "aws", "serverless"],
+  "author": "",
+  "license": "MIT"
+}

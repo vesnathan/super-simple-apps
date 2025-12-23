@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Shared DNS and Wildcard Certificate for Super Simple Apps"
+
+# IMPORTANT: Deploy this stack to us-east-1 (required for CloudFront/Cognito certificates)
+
+Parameters:
+  RootDomainName:
+    Type: String
+    Description: Root domain name (e.g., super-simple-apps.com)
+    Default: "super-simple-apps.com"
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for the root domain
+  CognitoDomainTarget:
+    Type: String
+    Description: CloudFront domain for Cognito custom domain (from Cognito stack)
+    Default: ""
+
+Conditions:
+  HasCognitoDomain: !Not [!Equals [!Ref CognitoDomainTarget, ""]]
+
+Resources:
+  # Wildcard SSL Certificate for *.super-simple-apps.com
+  # This single certificate covers ALL subdomains
+  WildcardCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref RootDomainName
+      SubjectAlternativeNames:
+        - !Sub "*.${RootDomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref RootDomainName
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub "${RootDomainName}-wildcard-certificate"
+        - Key: Project
+          Value: super-simple-apps
+
+  # Route53 A record for authentication.super-simple-apps.com
+  # Points to Cognito's CloudFront distribution
+  AuthenticationAliasRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCognitoDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "authentication.${RootDomainName}"
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront's fixed hosted zone ID
+        DNSName: !Ref CognitoDomainTarget
+        EvaluateTargetHealth: false
+
+Outputs:
+  WildcardCertificateArn:
+    Description: "ARN of the wildcard ACM certificate (use for all app CloudFront distributions)"
+    Value: !Ref WildcardCertificate
+    Export:
+      Name: SuperSimpleApps-WildcardCertificateArn
+
+  RootDomainName:
+    Description: "Root domain name"
+    Value: !Ref RootDomainName
+    Export:
+      Name: SuperSimpleApps-RootDomainName
+
+  HostedZoneId:
+    Description: "Route53 Hosted Zone ID"
+    Value: !Ref HostedZoneId
+    Export:
+      Name: SuperSimpleApps-HostedZoneId

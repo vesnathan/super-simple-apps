@@ -1,0 +1,67 @@
+{
+  "adsense": {
+    "client": "ca-pub-6030709852460281",
+    "slot": "",
+    "enabled": true
+  },
+  "stages": {
+    "dev": {
+      "lastUpdated": "2025-12-20T00:49:06.990Z",
+      "outputs": {
+        "UserPoolClientId": "62slce9utv1i61ft69jficatau",
+        "UserPoolId": "ap-southeast-2_V3l3Xgti3",
+        "UserPoolProviderName": "cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_V3l3Xgti3",
+        "UserPoolArn": "arn:aws:cognito-idp:ap-southeast-2:430118819356:userpool/ap-southeast-2_V3l3Xgti3",
+        "ApiGatewayId": "1vtcp1wu35",
+        "ApiUrl": "https://1vtcp1wu35.execute-api.ap-southeast-2.amazonaws.com/dev",
+        "WebsiteBucket": "simple-flashcards-frontend-dev",
+        "CloudFrontDistributionId": "E3VV75EBU9DQ3Z",
+        "WebsiteUrl": "https://d2ky7l37rpw6un.cloudfront.net",
+        "WebsiteBucketArn": "arn:aws:s3:::simple-flashcards-frontend-dev",
+        "CloudFrontDomainName": "d2ky7l37rpw6un.cloudfront.net",
+        "DecksTableName": "flashcards-dev-decks",
+        "DecksTableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-dev-decks",
+        "SyncUserDeckFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-syncUserDeck-dev",
+        "CreateDeckFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-createDeck-dev",
+        "UpdateUserCardFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-updateUserCard-dev",
+        "LambdaRoleArn": "arn:aws:iam::430118819356:role/simple-flashcards-lambda-role-dev",
+        "GetUserDecksFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-getUserDecks-dev",
+        "GetPublicDecksFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-getPublicDecks-dev",
+        "IdentityPoolId": "ap-southeast-2:f5fb0c86-3f01-4305-8efc-c0b8a723b348",
+        "AppSyncApiUrl": "https://psqw2euu5rb3blqx2vndkqgasa.appsync-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncRealtimeUrl": "wss://psqw2euu5rb3blqx2vndkqgasa.appsync-realtime-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncApiId": "d7hqxqp6l5ah7cpnh5ehr5n3yu",
+        "AppSyncLogGroupName": "/aws/appsync/apis/d7hqxqp6l5ah7cpnh5ehr5n3yu",
+        "DataTableName": "flashcards-dev-data",
+        "DataTableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-dev-data"
+      }
+    },
+    "prod": {
+      "lastUpdated": "2025-12-22T02:07:30.090Z",
+      "outputs": {
+        "UserPoolClientId": "39aeg83175u06gokdfmga1eit5",
+        "UserPoolId": "ap-southeast-2_kkjnAyzvX",
+        "UserPoolProviderName": "cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_kkjnAyzvX",
+        "IdentityPoolId": "ap-southeast-2:f8d18af2-4741-4d9e-871a-61ca81f5cbdd",
+        "UserPoolArn": "arn:aws:cognito-idp:ap-southeast-2:430118819356:userpool/ap-southeast-2_kkjnAyzvX",
+        "DataTableName": "flashcards-prod-data",
+        "DataTableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-prod-data",
+        "AppSyncApiUrl": "https://l7ltaeqwfbf6vdos2qhslducxq.appsync-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncRealtimeUrl": "wss://l7ltaeqwfbf6vdos2qhslducxq.appsync-realtime-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncApiId": "ve5xjipwlzeejg3eva67mide4i",
+        "AppSyncLogGroupName": "/aws/appsync/apis/ve5xjipwlzeejg3eva67mide4i",
+        "WebsiteBucket": "simple-flashcards-frontend-prod",
+        "CloudFrontDistributionId": "E2SOMA8XS5K4EP",
+        "WebsiteUrl": "https://d3t6rq9x6nqnvy.cloudfront.net",
+        "WebsiteBucketArn": "arn:aws:s3:::simple-flashcards-frontend-prod",
+        "CloudFrontDomainName": "d3t6rq9x6nqnvy.cloudfront.net",
+        "DataTableStreamArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-prod-data/stream/2025-12-22T01:07:22.870",
+        "SeoLambdaRoleArn": "arn:aws:iam::430118819356:role/simple-flashcards-seo-lambda-role-prod",
+        "GenerateDeckHtmlFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-generateDeckHtml-prod",
+        "ContactApiEndpoint": "https://rg2hw1pwi2.execute-api.ap-southeast-2.amazonaws.com/prod",
+        "ContactFormFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-contact-prod",
+        "ContactApiId": "rg2hw1pwi2"
+      }
+    }
+  }
+}

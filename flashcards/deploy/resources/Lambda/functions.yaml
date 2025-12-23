@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Simple Flashcards Lambda Functions"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+  AppName:
+    Type: String
+    Description: Application name
+    Default: simple-flashcards
+  S3Bucket:
+    Type: String
+    Description: S3 bucket containing Lambda code
+  S3Key:
+    Type: String
+    Description: S3 key for Lambda code zip
+  DecksTableName:
+    Type: String
+    Description: Name of the DynamoDB table
+  DecksTableArn:
+    Type: String
+    Description: ARN of the DynamoDB table
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+  UserPoolClientId:
+    Type: String
+    Description: Cognito User Pool Client ID
+
+Resources:
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-lambda-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !Ref DecksTableArn
+                  - !Sub "${DecksTableArn}/index/*"
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  # GetPublicDecks Function
+  GetPublicDecksFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-getPublicDecks-${Stage}"
+      Runtime: nodejs18.x
+      Handler: getPublicDecks.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Environment:
+        Variables:
+          DECKS_TABLE: !Ref DecksTableName
+          COGNITO_USER_POOL_ID: !Ref UserPoolId
+          COGNITO_CLIENT_ID: !Ref UserPoolClientId
+          STAGE: !Ref Stage
+      Timeout: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  GetPublicDecksPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetPublicDecksFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  # GetUserDecks Function
+  GetUserDecksFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-getUserDecks-${Stage}"
+      Runtime: nodejs18.x
+      Handler: getUserDecks.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Environment:
+        Variables:
+          DECKS_TABLE: !Ref DecksTableName
+          COGNITO_USER_POOL_ID: !Ref UserPoolId
+          COGNITO_CLIENT_ID: !Ref UserPoolClientId
+          STAGE: !Ref Stage
+      Timeout: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  GetUserDecksPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetUserDecksFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  # CreateDeck Function
+  CreateDeckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-createDeck-${Stage}"
+      Runtime: nodejs18.x
+      Handler: createDeck.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Environment:
+        Variables:
+          DECKS_TABLE: !Ref DecksTableName
+          COGNITO_USER_POOL_ID: !Ref UserPoolId
+          COGNITO_CLIENT_ID: !Ref UserPoolClientId
+          STAGE: !Ref Stage
+      Timeout: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  CreateDeckPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateDeckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  # SyncUserDeck Function
+  SyncUserDeckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-syncUserDeck-${Stage}"
+      Runtime: nodejs18.x
+      Handler: syncUserDeck.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Environment:
+        Variables:
+          DECKS_TABLE: !Ref DecksTableName
+          COGNITO_USER_POOL_ID: !Ref UserPoolId
+          COGNITO_CLIENT_ID: !Ref UserPoolClientId
+          STAGE: !Ref Stage
+      Timeout: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  SyncUserDeckPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SyncUserDeckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  # UpdateUserCard Function
+  UpdateUserCardFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-updateUserCard-${Stage}"
+      Runtime: nodejs18.x
+      Handler: updateUserCard.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Environment:
+        Variables:
+          DECKS_TABLE: !Ref DecksTableName
+          COGNITO_USER_POOL_ID: !Ref UserPoolId
+          COGNITO_CLIENT_ID: !Ref UserPoolClientId
+          STAGE: !Ref Stage
+      Timeout: 30
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  UpdateUserCardPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateUserCardFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+Outputs:
+  LambdaRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
+
+  GetPublicDecksFunctionArn:
+    Description: ARN of GetPublicDecks function
+    Value: !GetAtt GetPublicDecksFunction.Arn
+
+  GetUserDecksFunctionArn:
+    Description: ARN of GetUserDecks function
+    Value: !GetAtt GetUserDecksFunction.Arn
+
+  CreateDeckFunctionArn:
+    Description: ARN of CreateDeck function
+    Value: !GetAtt CreateDeckFunction.Arn
+
+  SyncUserDeckFunctionArn:
+    Description: ARN of SyncUserDeck function
+    Value: !GetAtt SyncUserDeckFunction.Arn
+
+  UpdateUserCardFunctionArn:
+    Description: ARN of UpdateUserCard function
+    Value: !GetAtt UpdateUserCardFunction.Arn

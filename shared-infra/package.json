@@ -1,0 +1,17 @@
+{
+  "name": "super-simple-apps-shared-infra",
+  "version": "1.0.0",
+  "description": "Shared infrastructure for Super Simple Apps (DNS, certificates, Cognito)",
+  "scripts": {
+    "deploy:dev": "npx tsx deploy.ts dev",
+    "deploy:prod": "npx tsx deploy.ts prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudformation": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

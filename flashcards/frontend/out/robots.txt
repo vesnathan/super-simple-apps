@@ -1,0 +1,6 @@
+# robots.txt for Super Simple Flashcards
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://www.super-simple-flashcards.com/sitemap.xml

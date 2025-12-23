@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Shared Cognito User Pool for Super Simple Apps"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (dev or prod)
+    AllowedValues:
+      - dev
+      - prod
+  RootDomainName:
+    Type: String
+    Description: Root domain name
+    Default: "super-simple-apps.com"
+  WildcardCertificateArn:
+    Type: String
+    Description: ARN of wildcard certificate for custom domain
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID
+
+Conditions:
+  IsProd: !Equals [!Ref Stage, "prod"]
+
+Resources:
+  # Shared User Pool - all Super Simple Apps use this
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "super-simple-apps-userpool-${Stage}"
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      AutoVerifiedAttributes:
+        - email
+      MfaConfiguration: "OPTIONAL"
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        Stack: !Sub "super-simple-apps-${Stage}"
+        Project: super-simple-apps
+
+  # Custom domain: authentication.super-simple-apps.com
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Condition: IsProd
+    Properties:
+      Domain: !Sub "authentication.${RootDomainName}"
+      UserPoolId: !Ref UserPool
+      CustomDomainConfig:
+        CertificateArn: !Ref WildcardCertificateArn
+
+  # Fallback Cognito domain for dev
+  UserPoolDomainDev:
+    Type: AWS::Cognito::UserPoolDomain
+    Condition: !Not [!Condition IsProd]
+    Properties:
+      Domain: !Sub "super-simple-apps-${Stage}"
+      UserPoolId: !Ref UserPool
+
+  # Client for Flashcards app
+  FlashcardsClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "flashcards-client-${Stage}"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}"
+          - "http://localhost:3000"
+        - "http://localhost:3000"
+      LogoutURLs:
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}"
+          - "http://localhost:3000"
+        - "http://localhost:3000"
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+        - aws.cognito.signin.user.admin
+      AllowedOAuthFlowsUserPoolClient: true
+
+  # Identity Pool for unauthenticated access (public decks, etc.)
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "super_simple_apps_identity_pool_${Stage}"
+      AllowUnauthenticatedIdentities: true
+      CognitoIdentityProviders:
+        - ClientId: !Ref FlashcardsClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt AuthenticatedRole.Arn
+        unauthenticated: !GetAtt UnauthenticatedRole.Arn
+
+  AuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "super-simple-apps-authenticated-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: authenticated
+      Tags:
+        - Key: Project
+          Value: super-simple-apps
+
+  UnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "super-simple-apps-unauthenticated-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: unauthenticated
+      Tags:
+        - Key: Project
+          Value: super-simple-apps
+
+  # Route53 A record for authentication subdomain (prod only)
+  AuthDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: IsProd
+    DependsOn: UserPoolDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "authentication.${RootDomainName}"
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront's fixed hosted zone ID
+        DNSName: !GetAtt UserPoolDomain.CloudFrontDistribution
+        EvaluateTargetHealth: false
+
+Outputs:
+  UserPoolId:
+    Description: ID of the Cognito User Pool
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolId-${Stage}"
+
+  UserPoolArn:
+    Description: ARN of the Cognito User Pool
+    Value: !GetAtt UserPool.Arn
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolArn-${Stage}"
+
+  FlashcardsClientId:
+    Description: ID of the Flashcards Cognito Client
+    Value: !Ref FlashcardsClient
+    Export:
+      Name: !Sub "SuperSimpleApps-FlashcardsClientId-${Stage}"
+
+  UserPoolProviderName:
+    Description: Provider name of the Cognito User Pool
+    Value: !GetAtt UserPool.ProviderName
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolProviderName-${Stage}"
+
+  IdentityPoolId:
+    Description: ID of the Cognito Identity Pool
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub "SuperSimpleApps-IdentityPoolId-${Stage}"
+
+  UserPoolDomainUrl:
+    Description: Cognito User Pool Domain URL
+    Value: !If
+      - IsProd
+      - !Sub "https://authentication.${RootDomainName}"
+      - !Sub "https://super-simple-apps-${Stage}.auth.${AWS::Region}.amazoncognito.com"
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolDomainUrl-${Stage}"

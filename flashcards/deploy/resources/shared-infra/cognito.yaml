@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Shared Cognito User Pool for Super Simple Apps"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (dev or prod)
+    AllowedValues:
+      - dev
+      - prod
+  RootDomainName:
+    Type: String
+    Description: Root domain for the app suite
+    Default: "super-simple-apps.com"
+  CertificateArn:
+    Type: String
+    Description: ARN of the wildcard certificate (for Cognito custom domain)
+    Default: ""
+
+Conditions:
+  IsProd: !Equals [!Ref Stage, "prod"]
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
+  CreateCustomDomain: !And
+    - !Condition IsProd
+    - !Condition HasCertificate
+
+Resources:
+  # Shared User Pool for all Super Simple Apps
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "super-simple-apps-${Stage}"
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        Project: super-simple-apps
+        Stage: !Ref Stage
+
+  # User Pool Client - shared by all apps
+  # Each app uses the same client with different callback URLs
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "super-simple-apps-client-${Stage}"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      CallbackURLs:
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}"
+          - "http://localhost:3000"
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}/auth/callback"
+          - "http://localhost:3000/auth/callback"
+        # Add more app callbacks here as needed:
+        # - !Sub "https://invoices.${RootDomainName}"
+      LogoutURLs:
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}"
+          - "http://localhost:3000"
+        # Add more app logout URLs here as needed
+
+  # Custom domain for Cognito Hosted UI (prod only)
+  # This allows authentication.super-simple-apps.com
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !If
+        - CreateCustomDomain
+        - !Sub "authentication.${RootDomainName}"
+        - !Sub "super-simple-apps-${Stage}"
+      UserPoolId: !Ref UserPool
+      CustomDomainConfig: !If
+        - CreateCustomDomain
+        - CertificateArn: !Ref CertificateArn
+        - !Ref AWS::NoValue
+
+  # Identity Pool for IAM-based auth (unauthenticated access to public resources)
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "super_simple_apps_${Stage}"
+      AllowUnauthenticatedIdentities: true
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  # IAM Role for authenticated users
+  AuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "super-simple-apps-auth-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: AuthenticatedAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # AppSync access for authenticated users - each app will add its own API
+              - Effect: Allow
+                Action:
+                  - appsync:GraphQL
+                Resource:
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Query/*"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Mutation/*"
+
+  # IAM Role for unauthenticated users (guest access)
+  UnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "super-simple-apps-unauth-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+      Policies:
+        - PolicyName: UnauthenticatedAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Limited read-only access to public queries across all apps
+              - Effect: Allow
+                Action:
+                  - appsync:GraphQL
+                Resource:
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Query/fields/publicDecks"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Query/fields/searchPublicDecks"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Query/fields/getDeck"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Query/fields/popularDecks"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Query/fields/getDecksByIds"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Mutation/fields/incrementDeckViews"
+                  - !Sub "arn:aws:appsync:${AWS::Region}:${AWS::AccountId}:apis/*/types/Mutation/fields/reportCard"
+
+  # Attach roles to identity pool
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt AuthenticatedRole.Arn
+        unauthenticated: !GetAtt UnauthenticatedRole.Arn
+
+Outputs:
+  UserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolId-${Stage}"
+
+  UserPoolArn:
+    Description: "Cognito User Pool ARN"
+    Value: !GetAtt UserPool.Arn
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolArn-${Stage}"
+
+  UserPoolClientId:
+    Description: "Cognito User Pool Client ID"
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolClientId-${Stage}"
+
+  UserPoolProviderName:
+    Description: "Cognito User Pool Provider Name"
+    Value: !GetAtt UserPool.ProviderName
+    Export:
+      Name: !Sub "SuperSimpleApps-UserPoolProviderName-${Stage}"
+
+  IdentityPoolId:
+    Description: "Cognito Identity Pool ID"
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub "SuperSimpleApps-IdentityPoolId-${Stage}"
+
+  AuthDomain:
+    Description: "Cognito Hosted UI Domain"
+    Value: !If
+      - CreateCustomDomain
+      - !Sub "https://authentication.${RootDomainName}"
+      - !Sub "https://super-simple-apps-${Stage}.auth.${AWS::Region}.amazoncognito.com"
+    Export:
+      Name: !Sub "SuperSimpleApps-AuthDomain-${Stage}"
+
+  AuthenticatedRoleArn:
+    Description: "ARN of the authenticated IAM role"
+    Value: !GetAtt AuthenticatedRole.Arn
+    Export:
+      Name: !Sub "SuperSimpleApps-AuthenticatedRoleArn-${Stage}"
+
+  UnauthenticatedRoleArn:
+    Description: "ARN of the unauthenticated IAM role"
+    Value: !GetAtt UnauthenticatedRole.Arn
+    Export:
+      Name: !Sub "SuperSimpleApps-UnauthenticatedRoleArn-${Stage}"
