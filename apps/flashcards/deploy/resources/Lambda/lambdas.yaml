@@ -1,0 +1,434 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Simple Flashcards Lambda Functions - Consolidated (SEO, Contact, Report Notification)"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+  AppName:
+    Type: String
+    Description: Application name
+    Default: simple-flashcards
+  S3Bucket:
+    Type: String
+    Description: S3 bucket containing Lambda code
+  # SEO Lambda code
+  SeoS3Key:
+    Type: String
+    Description: S3 key for SEO Lambda code zip
+  # Contact Lambda code
+  ContactS3Key:
+    Type: String
+    Description: S3 key for Contact Lambda code zip
+  # Report Notification Lambda code
+  ReportS3Key:
+    Type: String
+    Description: S3 key for Report Notification Lambda code zip
+  # DynamoDB parameters
+  DataTableName:
+    Type: String
+    Description: Name of the DynamoDB table
+  DataTableArn:
+    Type: String
+    Description: ARN of the DynamoDB table
+  DataTableStreamArn:
+    Type: String
+    Description: ARN of the DynamoDB table stream
+  # Frontend parameters (for SEO)
+  FrontendBucketName:
+    Type: String
+    Description: Name of the frontend S3 bucket
+  FrontendBucketArn:
+    Type: String
+    Description: ARN of the frontend S3 bucket
+  SiteUrl:
+    Type: String
+    Description: Public URL of the website
+  # Cognito parameters (for Report Notification)
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID for looking up user emails
+  # Email configuration
+  RecaptchaSecretKey:
+    Type: String
+    Description: reCAPTCHA v3 secret key
+    Default: ""
+    NoEcho: true
+  ContactEmail:
+    Type: String
+    Description: Email address to receive contact form submissions
+    Default: ""
+  AdminEmail:
+    Type: String
+    Description: Email address to receive reports for system decks
+    Default: ""
+  FromEmail:
+    Type: String
+    Description: Verified SES email address to send from
+    Default: ""
+
+Conditions:
+  HasSESConfig: !And
+    - !Not [!Equals [!Ref FromEmail, ""]]
+    - !Or
+      - !Not [!Equals [!Ref ContactEmail, ""]]
+      - !Not [!Equals [!Ref AdminEmail, ""]]
+
+Resources:
+  # ==========================================================================
+  # SEO LAMBDA (DynamoDB Stream -> S3 HTML Generator)
+  # ==========================================================================
+
+  SeoLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-seo-lambda-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBStreamAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:DescribeStream
+                  - dynamodb:ListStreams
+                Resource: !Ref DataTableStreamArn
+        - PolicyName: S3WriteAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub "${FrontendBucketArn}/deck/*"
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  GenerateDeckHtmlFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-generateDeckHtml-${Stage}"
+      Runtime: nodejs18.x
+      Handler: seo/generateDeckHtml.handler
+      Role: !GetAtt SeoLambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref SeoS3Key
+      Environment:
+        Variables:
+          FRONTEND_BUCKET: !Ref FrontendBucketName
+          SITE_URL: !Ref SiteUrl
+          STAGE: !Ref Stage
+      Timeout: 60
+      MemorySize: 256
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  SeoDynamoDBStreamEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !Ref DataTableStreamArn
+      FunctionName: !Ref GenerateDeckHtmlFunction
+      StartingPosition: LATEST
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+      FilterCriteria:
+        Filters:
+          - Pattern: '{"dynamodb":{"NewImage":{"PK":{"S":[{"prefix":"DECK#"}]}}}}'
+
+  GenerateDeckHtmlLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${GenerateDeckHtmlFunction}"
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  # ==========================================================================
+  # CONTACT FORM LAMBDA (API Gateway -> SES)
+  # ==========================================================================
+
+  ContactLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-contact-lambda-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - !If
+          - HasSESConfig
+          - PolicyName: SESAccess
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ses:SendEmail
+                    - ses:SendRawEmail
+                  Resource: "*"
+          - !Ref AWS::NoValue
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  ContactFormFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-contact-${Stage}"
+      Runtime: nodejs18.x
+      Handler: contact/submitContact.handler
+      Role: !GetAtt ContactLambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref ContactS3Key
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          RECAPTCHA_SECRET_KEY: !Ref RecaptchaSecretKey
+          CONTACT_EMAIL: !Ref ContactEmail
+          FROM_EMAIL: !Ref FromEmail
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  ContactFormLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ContactFormFunction}"
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+  # HTTP API (API Gateway v2) for contact endpoint
+  ContactApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${AppName}-contact-api-${Stage}"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 86400
+      Tags:
+        Project: !Ref AppName
+        Stage: !Ref Stage
+
+  ContactApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ContactApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ContactFormFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ContactApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ContactApi
+      RouteKey: "POST /contact"
+      Target: !Sub "integrations/${ContactApiIntegration}"
+
+  ContactApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ContactApi
+      StageName: !Ref Stage
+      AutoDeploy: true
+      Tags:
+        Project: !Ref AppName
+        Stage: !Ref Stage
+
+  ContactApiLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ContactFormFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ContactApi}/*"
+
+  # ==========================================================================
+  # REPORT NOTIFICATION LAMBDA (DynamoDB Stream -> SES)
+  # ==========================================================================
+
+  ReportNotificationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-report-notify-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBStreamAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:DescribeStream
+                  - dynamodb:ListStreams
+                Resource: !Ref DataTableStreamArn
+        - PolicyName: DynamoDBReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !Ref DataTableArn
+        - PolicyName: CognitoUserAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminGetUser
+                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+        - !If
+          - HasSESConfig
+          - PolicyName: SESAccess
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ses:SendEmail
+                    - ses:SendRawEmail
+                  Resource: "*"
+          - !Ref AWS::NoValue
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  ReportNotificationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-report-notify-${Stage}"
+      Runtime: nodejs18.x
+      Handler: reports/notifyReportedCard.handler
+      Role: !GetAtt ReportNotificationLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref ReportS3Key
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          TABLE_NAME: !Ref DataTableName
+          USER_POOL_ID: !Ref UserPoolId
+          ADMIN_EMAIL: !Ref AdminEmail
+          FROM_EMAIL: !Ref FromEmail
+      Timeout: 60
+      MemorySize: 256
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Stage
+          Value: !Ref Stage
+
+  ReportStreamEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !Ref DataTableStreamArn
+      FunctionName: !Ref ReportNotificationFunction
+      StartingPosition: LATEST
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+      FilterCriteria:
+        Filters:
+          - Pattern: '{"dynamodb":{"NewImage":{"PK":{"S":[{"prefix":"REPORT#"}]}}}}'
+
+  ReportNotificationLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ReportNotificationFunction}"
+      RetentionInDays: 14
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+
+Outputs:
+  # SEO Lambda outputs
+  GenerateDeckHtmlFunctionArn:
+    Description: ARN of GenerateDeckHtml function
+    Value: !GetAtt GenerateDeckHtmlFunction.Arn
+
+  SeoLambdaRoleArn:
+    Description: ARN of the SEO Lambda execution role
+    Value: !GetAtt SeoLambdaExecutionRole.Arn
+
+  # Contact Lambda outputs
+  ContactFormFunctionArn:
+    Description: ARN of Contact Form function
+    Value: !GetAtt ContactFormFunction.Arn
+
+  ContactApiEndpoint:
+    Description: Contact API endpoint URL
+    Value: !Sub "https://${ContactApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+
+  ContactApiId:
+    Description: Contact API ID
+    Value: !Ref ContactApi
+
+  # Report Notification Lambda outputs
+  ReportNotificationFunctionArn:
+    Description: ARN of Report Notification function
+    Value: !GetAtt ReportNotificationFunction.Arn
+
+  ReportNotificationRoleArn:
+    Description: ARN of the Report Notification Lambda execution role
+    Value: !GetAtt ReportNotificationLambdaRole.Arn

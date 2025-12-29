@@ -1,6 +1,0 @@
-Create an option for a 3 option multiple choice on the card create page. Defaults to a simple text box. Add a section below the answer for a section to explain the answer if wrong or right.
-
-Ad copmprehensive cards for various IT certifications, Licenceing for various motor vechicle licences, MR, Car Learners, by Country, State. Forklift ticvket tests by state country.
-Any other ideas that might drive traffic.
-
-Add tags for better search

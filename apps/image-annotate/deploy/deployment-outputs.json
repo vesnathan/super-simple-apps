@@ -1,0 +1,9 @@
+{
+  "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-image-annotate-deploy-role-prod",
+  "WebsiteBucket": "super-simple-image-annotate-prod",
+  "CustomDomain": "annotate.super-simple-apps.com",
+  "CloudFrontDistributionId": "E20JAY9XOOYN0C",
+  "WebsiteUrl": "https://annotate.super-simple-apps.com",
+  "WebsiteBucketArn": "arn:aws:s3:::super-simple-image-annotate-prod",
+  "CloudFrontDomainName": "d30mwulk50fvk6.cloudfront.net"
+}

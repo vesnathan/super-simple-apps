@@ -1,0 +1,245 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Super Simple Apps Job Timer Infrastructure (S3 + CloudFront)"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+  AppName:
+    Type: String
+    Description: Application name
+    Default: super-simple-timer
+  DomainName:
+    Type: String
+    Description: Custom domain name (e.g., timer.super-simple-apps.com)
+    Default: ""
+  CertificateArn:
+    Type: String
+    Description: ARN of ACM certificate for custom domain
+    Default: ""
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for DNS record
+    Default: ""
+  DeployUserArn:
+    Type: String
+    Description: ARN of the IAM user that can assume the deploy role
+    Default: ""
+
+Conditions:
+  HasCustomDomain: !And
+    - !Not [!Equals [!Ref DomainName, ""]]
+    - !Not [!Equals [!Ref CertificateArn, ""]]
+  HasHostedZone: !And
+    - !Condition HasCustomDomain
+    - !Not [!Equals [!Ref HostedZoneId, ""]]
+  HasDeployUser: !Not [!Equals [!Ref DeployUserArn, ""]]
+
+Resources:
+  # S3 Bucket for frontend static files
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    # Note: Using -frontend suffix because previous bucket was orphaned during stack deletion
+    Properties:
+      BucketName: !Sub "${AppName}-${Stage}-frontend"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 1
+      Tags:
+        - Key: Project
+          Value: super-simple-apps
+
+  # Bucket policy for public read access
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+  # CloudFront Function for SPA routing
+  SPARoutingFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${AppName}-${Stage}-spa-routing"
+      AutoPublish: true
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+
+          // If URI ends with /, append index.html
+          if (uri.endsWith('/')) {
+            request.uri += 'index.html';
+          }
+          // If URI doesn't have a file extension, add trailing slash and index.html
+          // This supports Next.js static export with trailingSlash: true
+          else if (!uri.match(/\.[a-zA-Z0-9]+$/)) {
+            request.uri += '/index.html';
+          }
+
+          return request;
+        }
+      FunctionConfig:
+        Comment: !Sub "SPA routing for ${AppName} ${Stage}"
+        Runtime: cloudfront-js-2.0
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      Tags:
+        - Key: Project
+          Value: super-simple-apps
+      DistributionConfig:
+        Comment: !Sub "CloudFront distribution for ${AppName} ${Stage}"
+        Origins:
+          - DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        # Custom domain configuration (if provided)
+        Aliases: !If
+          - HasCustomDomain
+          - - !Ref DomainName
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf  # CORS-S3Origin
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SPARoutingFunction.FunctionMetadata.FunctionARN
+        # Handle 403/404 for SPA routing
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+            ErrorCachingMinTTL: 10
+          - ErrorCode: 404
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+            ErrorCachingMinTTL: 10
+
+  # Route53 A Record pointing to CloudFront
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront's fixed hosted zone ID
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        EvaluateTargetHealth: false
+
+  # Deploy role - scoped to only this app's bucket and distribution
+  DeployRole:
+    Type: AWS::IAM::Role
+    Condition: HasDeployUser
+    Properties:
+      RoleName: !Sub "ssa-${AppName}-deploy-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref DeployUserArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Sub "${AppName}-${Stage}"
+      Policies:
+        - PolicyName: deploy-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3BucketAccess
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt FrontendBucket.Arn
+                  - !Sub "${FrontendBucket.Arn}/*"
+              - Sid: CloudFrontInvalidation
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                Resource: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+      Tags:
+        - Key: App
+          Value: !Ref AppName
+        - Key: Project
+          Value: super-simple-apps
+        - Key: Stage
+          Value: !Ref Stage
+        - Key: ManagedBy
+          Value: cloudformation
+
+Outputs:
+  WebsiteBucket:
+    Description: Name of the frontend S3 bucket
+    Value: !Ref FrontendBucket
+
+  WebsiteBucketArn:
+    Description: ARN of the frontend S3 bucket
+    Value: !GetAtt FrontendBucket.Arn
+
+  CloudFrontDistributionId:
+    Description: ID of the CloudFront distribution
+    Value: !Ref CloudFrontDistribution
+
+  CloudFrontDomainName:
+    Description: Domain name of the CloudFront distribution
+    Value: !GetAtt CloudFrontDistribution.DomainName
+
+  WebsiteUrl:
+    Description: URL of the website
+    Value: !If
+      - HasCustomDomain
+      - !Sub "https://${DomainName}"
+      - !Sub "https://${CloudFrontDistribution.DomainName}"
+
+  CustomDomain:
+    Description: Custom domain name (if configured)
+    Value: !If
+      - HasCustomDomain
+      - !Ref DomainName
+      - ""
+
+  DeployRoleArn:
+    Description: ARN of the deploy role for uploading frontend
+    Condition: HasDeployUser
+    Value: !GetAtt DeployRole.Arn

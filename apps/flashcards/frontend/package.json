@@ -1,0 +1,43 @@
+{
+ "name": "next-app-template",
+ "version": "0.0.1",
+ "private": true,
+ "scripts": {
+  "dev": "next dev",
+  "build": "next build && node scripts/inject-adsense.js",
+  "start": "next start",
+  "lint": "eslint . --ext .ts,.tsx -c .eslintrc.json --fix"
+ },
+ "dependencies": {
+  "@hookform/resolvers": "^5.2.2",
+  "@nextui-org/react": "^2.6.11",
+  "@react-aria/ssr": "3.9.7",
+  "@react-aria/visually-hidden": "3.8.18",
+  "@simple-flashcards/shared": "*",
+  "@tanstack/react-query": "^5.90.12",
+  "autoprefixer": "^10.4.16",
+  "aws-amplify": "^6.0.0",
+  "clsx": "2.1.1",
+  "framer-motion": "^12.23.26",
+  "intl-messageformat": "^10.5.0",
+  "lodash": "^4.17.21",
+  "next": "14.0.4",
+  "next-pwa": "^5.6.0",
+  "next-themes": "^0.4.4",
+  "postcss": "^8.4.31",
+  "react": "^18.2.0",
+  "react-dom": "^18.2.0",
+  "react-hook-form": "^7.69.0",
+  "react-toastify": "^11.0.3",
+  "tailwindcss": "^3.4.0",
+  "zod": "^3.22.0",
+  "zustand": "^5.0.3"
+ },
+ "devDependencies": {
+  "@react-types/shared": "^3.27.0",
+  "@types/lodash": "^4.17.21",
+  "autoprefixer": "^10.4.16",
+  "postcss": "^8.4.31",
+  "tailwindcss": "^3.4.0"
+ }
+}

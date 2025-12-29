@@ -1,0 +1,23 @@
+{
+  "UserPoolId": "ap-southeast-2_8DuTrT3yi",
+  "UserPoolProviderName": "cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_8DuTrT3yi",
+  "FlashcardsClientId": "65u5ivb161l365j3i501at887q",
+  "SharedClientId": "16s1f2187tqikp7lvn8tqcubcv",
+  "IdentityPoolId": "ap-southeast-2:e5812b93-8202-454e-acb6-0b2b04f1ce67",
+  "UserPoolArn": "arn:aws:cognito-idp:ap-southeast-2:430118819356:userpool/ap-southeast-2_8DuTrT3yi",
+  "UserPoolDomainUrl": "https://super-simple-apps-prod.auth.ap-southeast-2.amazoncognito.com",
+  "TableName": "super-simple-apps-business-prod",
+  "TableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/super-simple-apps-business-prod",
+  "BusinessDataTableName": "super-simple-apps-business-prod",
+  "AppSyncApiUrl": "https://bsontqa65febvgr3sob7nw4qq4.appsync-api.ap-southeast-2.amazonaws.com/graphql",
+  "AppSyncRealtimeUrl": "wss://bsontqa65febvgr3sob7nw4qq4.appsync-realtime-api.ap-southeast-2.amazonaws.com/graphql",
+  "AppSyncApiId": "ecasufei6feaxnxdam7vfewyrq",
+  "AppSyncLogGroupName": "/aws/appsync/apis/ecasufei6feaxnxdam7vfewyrq",
+  "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-apps-invoice-deploy-role-prod",
+  "WebsiteBucket": "super-simple-apps-invoice-prod-frontend",
+  "CustomDomain": "invoice.super-simple-apps.com",
+  "CloudFrontDistributionId": "E1MWTUUZJ67G78",
+  "WebsiteUrl": "https://invoice.super-simple-apps.com",
+  "WebsiteBucketArn": "arn:aws:s3:::super-simple-apps-invoice-prod-frontend",
+  "CloudFrontDomainName": "d1cre6az4le342.cloudfront.net"
+}

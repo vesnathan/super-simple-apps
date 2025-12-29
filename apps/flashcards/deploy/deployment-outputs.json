@@ -1,0 +1,72 @@
+{
+  "adsense": {
+    "client": "ca-pub-6030709852460281",
+    "slot": "",
+    "enabled": true
+  },
+  "stages": {
+    "dev": {
+      "lastUpdated": "2025-12-20T00:49:06.990Z",
+      "outputs": {
+        "UserPoolClientId": "62slce9utv1i61ft69jficatau",
+        "UserPoolId": "ap-southeast-2_V3l3Xgti3",
+        "UserPoolProviderName": "cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_V3l3Xgti3",
+        "UserPoolArn": "arn:aws:cognito-idp:ap-southeast-2:430118819356:userpool/ap-southeast-2_V3l3Xgti3",
+        "ApiGatewayId": "1vtcp1wu35",
+        "ApiUrl": "https://1vtcp1wu35.execute-api.ap-southeast-2.amazonaws.com/dev",
+        "WebsiteBucket": "simple-flashcards-frontend-dev",
+        "CloudFrontDistributionId": "E3VV75EBU9DQ3Z",
+        "WebsiteUrl": "https://d2ky7l37rpw6un.cloudfront.net",
+        "WebsiteBucketArn": "arn:aws:s3:::simple-flashcards-frontend-dev",
+        "CloudFrontDomainName": "d2ky7l37rpw6un.cloudfront.net",
+        "DecksTableName": "flashcards-dev-decks",
+        "DecksTableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-dev-decks",
+        "SyncUserDeckFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-syncUserDeck-dev",
+        "CreateDeckFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-createDeck-dev",
+        "UpdateUserCardFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-updateUserCard-dev",
+        "LambdaRoleArn": "arn:aws:iam::430118819356:role/simple-flashcards-lambda-role-dev",
+        "GetUserDecksFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-getUserDecks-dev",
+        "GetPublicDecksFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:simple-flashcards-getPublicDecks-dev",
+        "IdentityPoolId": "ap-southeast-2:f5fb0c86-3f01-4305-8efc-c0b8a723b348",
+        "AppSyncApiUrl": "https://psqw2euu5rb3blqx2vndkqgasa.appsync-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncRealtimeUrl": "wss://psqw2euu5rb3blqx2vndkqgasa.appsync-realtime-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncApiId": "d7hqxqp6l5ah7cpnh5ehr5n3yu",
+        "AppSyncLogGroupName": "/aws/appsync/apis/d7hqxqp6l5ah7cpnh5ehr5n3yu",
+        "DataTableName": "flashcards-dev-data",
+        "DataTableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-dev-data"
+      }
+    },
+    "prod": {
+      "lastUpdated": "2025-12-26T09:58:06.754Z",
+      "outputs": {
+        "UserPoolClientId": "16s1f2187tqikp7lvn8tqcubcv",
+        "UserPoolId": "ap-southeast-2_8DuTrT3yi",
+        "UserPoolProviderName": "cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_8DuTrT3yi",
+        "IdentityPoolId": "ap-southeast-2:e5812b93-8202-454e-acb6-0b2b04f1ce67",
+        "UserPoolArn": "arn:aws:cognito-idp:ap-southeast-2:430118819356:userpool/ap-southeast-2_8DuTrT3yi",
+        "DataTableName": "flashcards-prod-data",
+        "DataTableArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-prod-data",
+        "AppSyncApiUrl": "https://sa3dszlnffawzd3verqrvnmqmq.appsync-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncRealtimeUrl": "wss://sa3dszlnffawzd3verqrvnmqmq.appsync-realtime-api.ap-southeast-2.amazonaws.com/graphql",
+        "AppSyncApiId": "o5yemlnqyjgqlnhbqkqgzb4t3q",
+        "AppSyncLogGroupName": "/aws/appsync/apis/o5yemlnqyjgqlnhbqkqgzb4t3q",
+        "WebsiteBucket": "super-simple-flashcards-frontend-prod",
+        "CloudFrontDistributionId": "E1RO68EAKXV2A7",
+        "WebsiteUrl": "https://flashcards.super-simple-apps.com",
+        "WebsiteBucketArn": "arn:aws:s3:::super-simple-flashcards-frontend-prod",
+        "CloudFrontDomainName": "d1jcwxe6fry0jm.cloudfront.net",
+        "DataTableStreamArn": "arn:aws:dynamodb:ap-southeast-2:430118819356:table/flashcards-prod-data/stream/2025-12-25T00:58:24.912",
+        "SeoLambdaRoleArn": "arn:aws:iam::430118819356:role/super-simple-flashcards-seo-lambda-role-prod",
+        "GenerateDeckHtmlFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:super-simple-flashcards-generateDeckHtml-prod",
+        "ContactApiEndpoint": "https://u4lpx0qzqe.execute-api.ap-southeast-2.amazonaws.com/prod",
+        "ContactFormFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:super-simple-flashcards-contact-prod",
+        "ContactApiId": "u4lpx0qzqe",
+        "ReportNotificationFunctionArn": "arn:aws:lambda:ap-southeast-2:430118819356:function:super-simple-flashcards-report-notify-prod",
+        "ReportNotificationRoleArn": "arn:aws:iam::430118819356:role/super-simple-flashcards-report-notify-role-prod",
+        "SeedRoleArn": "arn:aws:iam::430118819356:role/ssa-flashcards-seed-role-prod",
+        "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-flashcards-deploy-role-prod",
+        "CustomDomain": "flashcards.super-simple-apps.com"
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-apps-job-timer-deploy-role-prod",
+  "WebsiteBucket": "super-simple-apps-job-timer-prod-frontend",
+  "CustomDomain": "job-timer.super-simple-apps.com",
+  "CloudFrontDistributionId": "EH354XNGW56PE",
+  "WebsiteUrl": "https://job-timer.super-simple-apps.com",
+  "WebsiteBucketArn": "arn:aws:s3:::super-simple-apps-job-timer-prod-frontend",
+  "CloudFrontDomainName": "d132ut23ah8w5j.cloudfront.net"
+}

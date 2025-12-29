@@ -50,28 +50,125 @@ Resources:
           - Name: verified_email
             Priority: 1
       UserPoolTags:
-        Stack: !Sub "super-simple-apps-${Stage}"
-        Project: super-simple-apps
+        App: ssa-shared
+        Stage: !Ref Stage
+        ManagedBy: cloudformation
 
-  # Custom domain: authentication.super-simple-apps.com
+  # Cognito hosted domain (prefix domain - simpler and more reliable)
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
-    Condition: IsProd
-    Properties:
-      Domain: !Sub "authentication.${RootDomainName}"
-      UserPoolId: !Ref UserPool
-      CustomDomainConfig:
-        CertificateArn: !Ref WildcardCertificateArn
-
-  # Fallback Cognito domain for dev
-  UserPoolDomainDev:
-    Type: AWS::Cognito::UserPoolDomain
-    Condition: !Not [!Condition IsProd]
     Properties:
       Domain: !Sub "super-simple-apps-${Stage}"
       UserPoolId: !Ref UserPool
 
-  # Client for Flashcards app
+  # Shared client for all Super Simple Apps
+  # All apps use this single client with their respective callback URLs
+  SharedClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "super-simple-apps-client-${Stage}"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        # Local development
+        - "http://localhost:3000"
+        - "http://localhost:3001"
+        - "http://localhost:3002"
+        - "http://localhost:3005"
+        - "http://localhost:3006"
+        - "http://localhost:3007"
+        # Production apps
+        - !If
+          - IsProd
+          - !Sub "https://${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://job-timer.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://crop.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://resize.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://annotate.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://crm.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://invoice.${RootDomainName}"
+          - !Ref AWS::NoValue
+      LogoutURLs:
+        # Local development
+        - "http://localhost:3000"
+        - "http://localhost:3001"
+        - "http://localhost:3002"
+        - "http://localhost:3005"
+        - "http://localhost:3006"
+        - "http://localhost:3007"
+        # Production apps
+        - !If
+          - IsProd
+          - !Sub "https://${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://flashcards.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://job-timer.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://crop.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://resize.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://annotate.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://crm.${RootDomainName}"
+          - !Ref AWS::NoValue
+        - !If
+          - IsProd
+          - !Sub "https://invoice.${RootDomainName}"
+          - !Ref AWS::NoValue
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+        - aws.cognito.signin.user.admin
+      AllowedOAuthFlowsUserPoolClient: true
+
+  # Legacy client for Flashcards (for backward compatibility during transition)
+  # TODO: Migrate flashcards to use SharedClient and remove this
   FlashcardsClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
@@ -113,6 +210,8 @@ Resources:
       IdentityPoolName: !Sub "super_simple_apps_identity_pool_${Stage}"
       AllowUnauthenticatedIdentities: true
       CognitoIdentityProviders:
+        - ClientId: !Ref SharedClient
+          ProviderName: !GetAtt UserPool.ProviderName
         - ClientId: !Ref FlashcardsClient
           ProviderName: !GetAtt UserPool.ProviderName
 
@@ -141,8 +240,12 @@ Resources:
               ForAnyValue:StringLike:
                 cognito-identity.amazonaws.com:amr: authenticated
       Tags:
-        - Key: Project
-          Value: super-simple-apps
+        - Key: App
+          Value: ssa-shared
+        - Key: Stage
+          Value: !Ref Stage
+        - Key: ManagedBy
+          Value: cloudformation
 
   UnauthenticatedRole:
     Type: AWS::IAM::Role
@@ -161,22 +264,12 @@ Resources:
               ForAnyValue:StringLike:
                 cognito-identity.amazonaws.com:amr: unauthenticated
       Tags:
-        - Key: Project
-          Value: super-simple-apps
-
-  # Route53 A record for authentication subdomain (prod only)
-  AuthDNSRecord:
-    Type: AWS::Route53::RecordSet
-    Condition: IsProd
-    DependsOn: UserPoolDomain
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Sub "authentication.${RootDomainName}"
-      Type: A
-      AliasTarget:
-        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront's fixed hosted zone ID
-        DNSName: !GetAtt UserPoolDomain.CloudFrontDistribution
-        EvaluateTargetHealth: false
+        - Key: App
+          Value: ssa-shared
+        - Key: Stage
+          Value: !Ref Stage
+        - Key: ManagedBy
+          Value: cloudformation
 
 Outputs:
   UserPoolId:
@@ -191,8 +284,14 @@ Outputs:
     Export:
       Name: !Sub "SuperSimpleApps-UserPoolArn-${Stage}"
 
+  SharedClientId:
+    Description: ID of the shared Cognito Client (used by all apps)
+    Value: !Ref SharedClient
+    Export:
+      Name: !Sub "SuperSimpleApps-SharedClientId-${Stage}"
+
   FlashcardsClientId:
-    Description: ID of the Flashcards Cognito Client
+    Description: ID of the Flashcards Cognito Client (legacy - use SharedClientId)
     Value: !Ref FlashcardsClient
     Export:
       Name: !Sub "SuperSimpleApps-FlashcardsClientId-${Stage}"
@@ -211,9 +310,6 @@ Outputs:
 
   UserPoolDomainUrl:
     Description: Cognito User Pool Domain URL
-    Value: !If
-      - IsProd
-      - !Sub "https://authentication.${RootDomainName}"
-      - !Sub "https://super-simple-apps-${Stage}.auth.${AWS::Region}.amazoncognito.com"
+    Value: !Sub "https://super-simple-apps-${Stage}.auth.${AWS::Region}.amazoncognito.com"
     Export:
       Name: !Sub "SuperSimpleApps-UserPoolDomainUrl-${Stage}"

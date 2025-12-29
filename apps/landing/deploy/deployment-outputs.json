@@ -1,0 +1,9 @@
+{
+  "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-landing-deploy-role-prod",
+  "WebsiteBucket": "super-simple-landing-prod",
+  "CustomDomain": "super-simple-apps.com",
+  "CloudFrontDistributionId": "E1OMXLQ7TKY4EE",
+  "WebsiteUrl": "https://super-simple-apps.com",
+  "WebsiteBucketArn": "arn:aws:s3:::super-simple-landing-prod",
+  "CloudFrontDomainName": "dox4k2pvyxx3o.cloudfront.net"
+}

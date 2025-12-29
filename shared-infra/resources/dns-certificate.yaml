@@ -26,8 +26,12 @@ Resources:
         - DomainName: !Sub "*.${RootDomainName}"
           HostedZoneId: !Ref HostedZoneId
       Tags:
-        - Key: Project
-          Value: super-simple-apps
+        - Key: App
+          Value: ssa-shared
+        - Key: Stage
+          Value: prod
+        - Key: ManagedBy
+          Value: cloudformation
 
 Outputs:
   WildcardCertificateArn:

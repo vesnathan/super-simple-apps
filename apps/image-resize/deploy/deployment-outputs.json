@@ -1,0 +1,9 @@
+{
+  "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-image-resize-deploy-role-prod",
+  "WebsiteBucket": "super-simple-image-resize-prod",
+  "CustomDomain": "resize.super-simple-apps.com",
+  "CloudFrontDistributionId": "E2QWQ51RFO7MJJ",
+  "WebsiteUrl": "https://resize.super-simple-apps.com",
+  "WebsiteBucketArn": "arn:aws:s3:::super-simple-image-resize-prod",
+  "CloudFrontDomainName": "d2xm7j2dmlk8cg.cloudfront.net"
+}

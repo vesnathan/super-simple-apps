@@ -1,0 +1,15 @@
+{
+  "extends": "./frontend/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./frontend/src/*"],
+      "@/types/*": ["./types/*"],
+      "@/components/*": ["./frontend/src/components/*"],
+      "@/stores/*": ["./frontend/src/stores/*"],
+      "@/services/*": ["./frontend/src/services/*"]
+    }
+  },
+  "include": ["frontend/src/**/*.ts", "frontend/src/**/*.tsx", "types/**/*.ts"],
+  "exclude": ["node_modules", "backend", "deploy", "**/node_modules"]
+}

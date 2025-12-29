@@ -1,0 +1,16 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  getInvoice(id: ID!): Invoice @aws_cognito_user_pools
+  listInvoices(limit: Int, nextToken: String): InvoiceConnection! @aws_cognito_user_pools
+}
+
+type Mutation {
+  createInvoice(input: CreateInvoiceInput!): Invoice! @aws_cognito_user_pools
+  updateInvoice(input: UpdateInvoiceInput!): Invoice! @aws_cognito_user_pools
+  deleteInvoice(id: ID!): Boolean! @aws_cognito_user_pools
+  syncInvoices(invoices: [SyncInvoiceInput!]!): SyncResult! @aws_cognito_user_pools
+}

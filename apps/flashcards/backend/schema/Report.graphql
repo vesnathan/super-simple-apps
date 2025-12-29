@@ -1,0 +1,30 @@
+# Report types and operations for admin functionality
+
+type Report @aws_cognito_user_pools {
+  id: ID!
+  deckId: ID!
+  cardId: ID!
+  reason: String!
+  status: String!
+  createdAt: AWSDateTime!
+}
+
+type ReportsResult @aws_cognito_user_pools {
+  reports: [Report!]!
+  nextToken: String
+}
+
+type UpdateReportResult @aws_cognito_user_pools {
+  success: Boolean!
+  report: Report
+}
+
+extend type Query {
+  # Get all pending reports (admin only - protected at frontend level)
+  pendingReports(limit: Int): ReportsResult! @aws_cognito_user_pools
+}
+
+extend type Mutation {
+  # Update report status (resolve or dismiss)
+  updateReportStatus(reportId: ID!, deckId: ID!, cardId: ID!, status: String!): UpdateReportResult! @aws_cognito_user_pools
+}

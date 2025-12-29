@@ -1,0 +1,62 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormation",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:GetTemplate"
+      ],
+      "Resource": "arn:aws:cloudformation:*:430118819356:stack/super-simple-apps-*/*"
+    },
+    {
+      "Sid": "CloudFormationList",
+      "Effect": "Allow",
+      "Action": "cloudformation:ListStacks",
+      "Resource": "*"
+    },
+    {
+      "Sid": "TemplateBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket",
+        "s3:HeadBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::ssa-deploy-templates",
+        "arn:aws:s3:::ssa-deploy-templates/*"
+      ]
+    },
+    {
+      "Sid": "PassCFNRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::430118819356:role/ssa-cloudformation-role",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "cloudformation.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "AssumeDeployRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::430118819356:role/ssa-*-deploy-role-*"
+    },
+    {
+      "Sid": "IAMReadRole",
+      "Effect": "Allow",
+      "Action": "iam:GetRole",
+      "Resource": "arn:aws:iam::430118819356:role/ssa-cloudformation-role"
+    }
+  ]
+}

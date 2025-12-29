@@ -1,0 +1,37 @@
+# Super Simple CRM - GraphQL Schema
+# Base types and root Query/Mutation definitions
+
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  # Get a single client by ID (requires auth)
+  getClient(id: ID!): Client @aws_cognito_user_pools
+
+  # List all clients for the current user
+  listClients(limit: Int, nextToken: String): ClientConnection @aws_cognito_user_pools
+}
+
+type Mutation {
+  # Create a new client
+  createClient(input: CreateClientInput!): Client @aws_cognito_user_pools
+
+  # Update an existing client
+  updateClient(input: UpdateClientInput!): Client @aws_cognito_user_pools
+
+  # Delete a client
+  deleteClient(id: ID!): Boolean @aws_cognito_user_pools
+
+  # Sync multiple clients (for bulk local -> cloud sync)
+  syncClients(input: SyncClientsInput!): SyncClientsResult @aws_cognito_user_pools
+}
+
+# Pagination support
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}

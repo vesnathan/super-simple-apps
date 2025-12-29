@@ -1,0 +1,70 @@
+# Client type for CRM
+
+type Client @aws_iam @aws_cognito_user_pools {
+  id: ID!
+  userId: ID!
+  name: String!
+  email: String
+  phone: String
+  company: String
+  address: String
+  notes: String
+  tags: [String!]!
+  hourlyRate: Float
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  syncedAt: AWSDateTime
+}
+
+type ClientConnection @aws_iam @aws_cognito_user_pools {
+  items: [Client!]!
+  nextToken: String
+}
+
+input CreateClientInput {
+  id: ID
+  name: String!
+  email: String
+  phone: String
+  company: String
+  address: String
+  notes: String
+  tags: [String!]
+  hourlyRate: Float
+}
+
+input UpdateClientInput {
+  id: ID!
+  name: String
+  email: String
+  phone: String
+  company: String
+  address: String
+  notes: String
+  tags: [String!]
+  hourlyRate: Float
+}
+
+input SyncClientsInput {
+  clients: [SyncClientInput!]!
+}
+
+input SyncClientInput {
+  id: ID!
+  name: String!
+  email: String
+  phone: String
+  company: String
+  address: String
+  notes: String
+  tags: [String!]
+  hourlyRate: Float
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type SyncClientsResult @aws_iam @aws_cognito_user_pools {
+  synced: Int!
+  clients: [Client!]!
+}
+

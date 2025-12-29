@@ -1,57 +1,65 @@
+/**
+ * Super Simple Apps - Shared Infrastructure Deployment
+ *
+ * Deploys:
+ *   1. DNS/Certificate stack (us-east-1) - wildcard cert for *.super-simple-apps.com
+ *   2. Cognito stack (ap-southeast-2) - shared user pool for all apps
+ *   3. DynamoDB stack (ap-southeast-2) - shared data table for CRM, Invoice, Job Timer
+ *
+ * SECURITY MODEL:
+ *   - Deploy user has minimal permissions (see bootstrap-check.ts)
+ *   - CloudFormation uses a service role to create resources
+ *   - App-specific deploy roles are created by CloudFormation for S3/CloudFront access
+ */
+
+import { config } from "dotenv";
+import * as path from "path";
+import { readFileSync, existsSync } from "fs";
+
+config({ path: path.resolve(__dirname, "../.env") });
+
 import {
   CloudFormationClient,
   CreateStackCommand,
   UpdateStackCommand,
   DescribeStacksCommand,
-  Parameter,
   Capability,
 } from "@aws-sdk/client-cloudformation";
-import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
-import { readFileSync, existsSync } from "fs";
-import * as path from "path";
+import {
+  S3Client,
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
+
+import {
+  checkBootstrapResources,
+  printBootstrapInstructions,
+  getBootstrapConfig,
+} from "../deploy/bootstrap-check";
 
 const REGION_MAIN = process.env.AWS_REGION || "ap-southeast-2";
-const REGION_US_EAST_1 = "us-east-1"; // Required for CloudFront certificates
+const REGION_US_EAST_1 = "us-east-1";
+const DEPLOY_USER_ARN = process.env.DEPLOY_USER_ARN || "arn:aws:iam::430118819356:user/ssa-deploy";
 
-// Configuration - update these for your environment
 const CONFIG = {
   rootDomain: "super-simple-apps.com",
-  hostedZoneId: process.env.HOSTED_ZONE_ID || "", // Set this or pass as env var
-  templateBucket: "super-simple-apps-templates",
+  hostedZoneId: process.env.HOSTED_ZONE_ID || "",
 };
 
-interface ErrorWithMessage {
+interface StackError {
   message?: string;
   name?: string;
-  Code?: string;
 }
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function ensureBucketExists(s3: S3Client, bucketName: string, region: string): Promise<void> {
-  try {
-    await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
-    console.log(`✓ Bucket ${bucketName} exists`);
-  } catch (error: unknown) {
-    const err = error as ErrorWithMessage;
-    if (err.name === "NotFound" || err.Code === "NotFound" || err.name === "NoSuchBucket") {
-      console.log(`Creating bucket ${bucketName}...`);
-      await s3.send(new CreateBucketCommand({
-        Bucket: bucketName,
-        CreateBucketConfiguration: region === "us-east-1" ? undefined : {
-          LocationConstraint: region as any,
-        },
-      }));
-      console.log(`✓ Bucket ${bucketName} created`);
-    } else {
-      throw error;
-    }
-  }
-}
-
-async function uploadTemplate(s3: S3Client, bucketName: string, templatePath: string, key: string): Promise<string> {
+async function uploadTemplate(
+  s3: S3Client,
+  bucketName: string,
+  templatePath: string,
+  key: string
+): Promise<string> {
   const templateContent = readFileSync(templatePath, "utf8");
 
   await s3.send(new PutObjectCommand({
@@ -65,78 +73,75 @@ async function uploadTemplate(s3: S3Client, bucketName: string, templatePath: st
   return `https://s3.amazonaws.com/${bucketName}/${key}`;
 }
 
-async function waitForStackCompletion(
+async function waitForStack(
   cfn: CloudFormationClient,
   stackName: string,
   operation: "CREATE" | "UPDATE"
 ): Promise<void> {
-  const maxAttempts = 120; // 20 minutes
-  const delay = 10000; // 10 seconds
+  const maxAttempts = 120;
+  const delay = 10000;
 
-  const inProgressStatuses = operation === "CREATE"
-    ? ["CREATE_IN_PROGRESS", "REVIEW_IN_PROGRESS"]
-    : ["UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS"];
+  const successStatus = `${operation}_COMPLETE`;
+  const failurePatterns = ["FAILED", "ROLLBACK"];
 
-  const successStatus = operation === "CREATE" ? "CREATE_COMPLETE" : "UPDATE_COMPLETE";
-  const failureStatuses = operation === "CREATE"
-    ? ["CREATE_FAILED", "ROLLBACK_COMPLETE", "ROLLBACK_FAILED", "ROLLBACK_IN_PROGRESS"]
-    : ["UPDATE_FAILED", "UPDATE_ROLLBACK_FAILED", "UPDATE_ROLLBACK_IN_PROGRESS", "UPDATE_ROLLBACK_COMPLETE"];
+  console.log(`   Waiting for stack ${operation.toLowerCase()}...`);
 
   for (let i = 0; i < maxAttempts; i++) {
     const response = await cfn.send(new DescribeStacksCommand({ StackName: stackName }));
-    const stack = response.Stacks?.[0];
-    const status = stack?.StackStatus;
+    const status = response.Stacks?.[0]?.StackStatus || "";
 
     if (status === successStatus) {
-      console.log(`✓ Stack ${stackName} ${operation.toLowerCase()} completed`);
+      console.log(`✓ Stack ${operation.toLowerCase()} complete`);
       return;
     }
 
-    if (status && failureStatuses.includes(status)) {
-      const reason = stack?.StackStatusReason || "No reason provided";
-      throw new Error(`Stack ${stackName} failed: ${status} - ${reason}`);
+    if (failurePatterns.some((p) => status.includes(p))) {
+      const reason = response.Stacks?.[0]?.StackStatusReason || "No reason provided";
+      throw new Error(`Stack ${operation.toLowerCase()} failed: ${status} - ${reason}`);
     }
 
-    if (status && !inProgressStatuses.includes(status)) {
-      console.log(`Stack status: ${status}`);
+    if (i % 6 === 0 && i > 0) {
+      console.log(`   Still waiting... (${Math.floor(i * delay / 60000)} min)`);
     }
 
     await sleep(delay);
   }
 
-  throw new Error(`Timeout waiting for stack ${stackName}`);
+  throw new Error(`Timeout waiting for stack ${operation.toLowerCase()}`);
 }
 
-async function deployOrUpdateStack(
+async function deployStack(
   cfn: CloudFormationClient,
   stackName: string,
   templateUrl: string,
-  parameters: Parameter[]
-): Promise<{ outputs: Record<string, string> }> {
+  parameters: { ParameterKey: string; ParameterValue: string }[],
+  roleArn: string
+): Promise<Record<string, string>> {
   // Check if stack exists
   let stackExists = false;
   try {
     const response = await cfn.send(new DescribeStacksCommand({ StackName: stackName }));
     stackExists = !!(response.Stacks && response.Stacks.length > 0);
   } catch (error: unknown) {
-    const err = error as ErrorWithMessage;
+    const err = error as StackError;
     if (!err.message?.includes("does not exist")) {
       throw error;
     }
   }
 
   if (stackExists) {
-    console.log(`Updating stack ${stackName}...`);
+    console.log(`Updating stack: ${stackName}`);
     try {
       await cfn.send(new UpdateStackCommand({
         StackName: stackName,
         TemplateURL: templateUrl,
         Parameters: parameters,
         Capabilities: [Capability.CAPABILITY_NAMED_IAM],
+        RoleARN: roleArn,
       }));
-      await waitForStackCompletion(cfn, stackName, "UPDATE");
+      await waitForStack(cfn, stackName, "UPDATE");
     } catch (error: unknown) {
-      const err = error as ErrorWithMessage;
+      const err = error as StackError;
       if (err.message?.includes("No updates are to be performed")) {
         console.log(`✓ Stack ${stackName} is already up to date`);
       } else {
@@ -144,14 +149,15 @@ async function deployOrUpdateStack(
       }
     }
   } else {
-    console.log(`Creating stack ${stackName}...`);
+    console.log(`Creating stack: ${stackName}`);
     await cfn.send(new CreateStackCommand({
       StackName: stackName,
       TemplateURL: templateUrl,
       Parameters: parameters,
       Capabilities: [Capability.CAPABILITY_NAMED_IAM],
+      RoleARN: roleArn,
     }));
-    await waitForStackCompletion(cfn, stackName, "CREATE");
+    await waitForStack(cfn, stackName, "CREATE");
   }
 
   // Get outputs
@@ -163,102 +169,162 @@ async function deployOrUpdateStack(
     }
   });
 
-  return { outputs };
+  return outputs;
 }
 
 async function deploySharedInfra(stage: string): Promise<void> {
-  console.log("\n🚀 Deploying Super Simple Apps Shared Infrastructure\n");
-  console.log(`Stage: ${stage}`);
+  console.log("\n" + "=".repeat(60));
+  console.log("  Super Simple Apps - Shared Infrastructure Deployment");
+  console.log("=".repeat(60));
+  console.log(`\nStage: ${stage}`);
   console.log(`Root Domain: ${CONFIG.rootDomain}`);
-  console.log(`Hosted Zone ID: ${CONFIG.hostedZoneId || "NOT SET"}`);
+  console.log(`Hosted Zone ID: ${CONFIG.hostedZoneId || "NOT SET"}\n`);
 
   if (!CONFIG.hostedZoneId) {
-    console.error("\n❌ Error: HOSTED_ZONE_ID environment variable is required");
-    console.error("   Set it with: export HOSTED_ZONE_ID=your-zone-id");
+    console.error("❌ Error: HOSTED_ZONE_ID environment variable is required");
+    console.error("   Set it in .env file or: export HOSTED_ZONE_ID=your-zone-id");
     process.exit(1);
   }
 
+  // Check bootstrap resources (single bucket in ap-southeast-2, IAM is global)
+  console.log("Checking bootstrap resources...\n");
+
+  const bootstrapCheck = await checkBootstrapResources();
+
+  if (!bootstrapCheck.ready) {
+    printBootstrapInstructions(
+      bootstrapCheck.missingBucket,
+      bootstrapCheck.missingRole,
+      bootstrapCheck.config,
+      DEPLOY_USER_ARN
+    );
+    process.exit(1);
+  }
+
+  console.log("✓ Bootstrap resources verified\n");
+
   const templateDir = path.join(__dirname, "resources");
+  const cfnRoleArn = bootstrapCheck.config.cfnRoleArn;
+  const templateBucketName = bootstrapCheck.config.templateBucketName;
 
   // Step 1: Deploy DNS/Certificate stack to us-east-1
-  console.log("\n📋 Step 1: Deploying DNS & Certificate to us-east-1...");
-  console.log("   (ACM certificates for CloudFront must be in us-east-1)");
-  console.log("   ⏳ This may take 5-10 minutes for certificate validation...\n");
+  console.log("─".repeat(60));
+  console.log("Step 1: DNS & Certificate (us-east-1)");
+  console.log("─".repeat(60));
+  console.log("(ACM certificates for CloudFront must be in us-east-1)");
+  console.log("⏳ Certificate validation may take 5-10 minutes...\n");
 
-  const s3UsEast1 = new S3Client({ region: REGION_US_EAST_1 });
+  // S3 client for template uploads (always ap-southeast-2)
+  const s3Main = new S3Client({ region: REGION_MAIN });
+  // CloudFormation client for us-east-1 (DNS/cert stack)
   const cfnUsEast1 = new CloudFormationClient({ region: REGION_US_EAST_1 });
 
-  // Ensure template bucket exists in us-east-1
-  const templateBucketUsEast1 = `${CONFIG.templateBucket}-us-east-1`;
-  await ensureBucketExists(s3UsEast1, templateBucketUsEast1, REGION_US_EAST_1);
-
-  // Upload DNS certificate template
   const dnsCertTemplatePath = path.join(templateDir, "dns-certificate.yaml");
   if (!existsSync(dnsCertTemplatePath)) {
     throw new Error(`Template not found: ${dnsCertTemplatePath}`);
   }
+
   const dnsCertTemplateUrl = await uploadTemplate(
-    s3UsEast1,
-    templateBucketUsEast1,
+    s3Main,
+    templateBucketName,
     dnsCertTemplatePath,
-    "dns-certificate.yaml"
+    `shared-infra/${stage}/dns-certificate.yaml`
   );
 
-  // Deploy DNS/Certificate stack
-  const dnsStackName = `super-simple-apps-dns-certificate`;
-  const { outputs: dnsOutputs } = await deployOrUpdateStack(cfnUsEast1, dnsStackName, dnsCertTemplateUrl, [
-    { ParameterKey: "RootDomainName", ParameterValue: CONFIG.rootDomain },
-    { ParameterKey: "HostedZoneId", ParameterValue: CONFIG.hostedZoneId },
-  ]);
+  const dnsOutputs = await deployStack(
+    cfnUsEast1,
+    `super-simple-apps-dns-certificate`,
+    dnsCertTemplateUrl,
+    [
+      { ParameterKey: "RootDomainName", ParameterValue: CONFIG.rootDomain },
+      { ParameterKey: "HostedZoneId", ParameterValue: CONFIG.hostedZoneId },
+    ],
+    cfnRoleArn
+  );
 
   const certificateArn = dnsOutputs.WildcardCertificateArn;
-  console.log(`\n✓ Certificate ARN: ${certificateArn}`);
+  console.log(`\n✓ Certificate ARN: ${certificateArn}\n`);
+
+  const cfnMain = new CloudFormationClient({ region: REGION_MAIN });
 
   // Step 2: Deploy Cognito stack to main region (only for prod)
   if (stage === "prod") {
-    console.log("\n📋 Step 2: Deploying Cognito to main region...");
+    console.log("─".repeat(60));
+    console.log("Step 2: Cognito User Pool (ap-southeast-2)");
+    console.log("─".repeat(60) + "\n");
 
-    const s3Main = new S3Client({ region: REGION_MAIN });
-    const cfnMain = new CloudFormationClient({ region: REGION_MAIN });
-
-    // Ensure template bucket exists in main region
-    const templateBucketMain = `${CONFIG.templateBucket}-${REGION_MAIN}`;
-    await ensureBucketExists(s3Main, templateBucketMain, REGION_MAIN);
-
-    // Upload Cognito template
     const cognitoTemplatePath = path.join(templateDir, "cognito.yaml");
     if (!existsSync(cognitoTemplatePath)) {
       throw new Error(`Template not found: ${cognitoTemplatePath}`);
     }
+
     const cognitoTemplateUrl = await uploadTemplate(
       s3Main,
-      templateBucketMain,
+      templateBucketName,
       cognitoTemplatePath,
-      "cognito.yaml"
+      `shared-infra/${stage}/cognito.yaml`
     );
 
-    // Deploy Cognito stack
-    const cognitoStackName = `super-simple-apps-cognito-${stage}`;
-    const { outputs: cognitoOutputs } = await deployOrUpdateStack(cfnMain, cognitoStackName, cognitoTemplateUrl, [
-      { ParameterKey: "Stage", ParameterValue: stage },
-      { ParameterKey: "RootDomainName", ParameterValue: CONFIG.rootDomain },
-      { ParameterKey: "WildcardCertificateArn", ParameterValue: certificateArn },
-      { ParameterKey: "HostedZoneId", ParameterValue: CONFIG.hostedZoneId },
-    ]);
+    const cognitoOutputs = await deployStack(
+      cfnMain,
+      `super-simple-apps-cognito-${stage}`,
+      cognitoTemplateUrl,
+      [
+        { ParameterKey: "Stage", ParameterValue: stage },
+        { ParameterKey: "RootDomainName", ParameterValue: CONFIG.rootDomain },
+        { ParameterKey: "WildcardCertificateArn", ParameterValue: certificateArn },
+        { ParameterKey: "HostedZoneId", ParameterValue: CONFIG.hostedZoneId },
+      ],
+      cfnRoleArn
+    );
 
     console.log("\n✓ Cognito Outputs:");
-    console.log(`  User Pool ID: ${cognitoOutputs.UserPoolId}`);
-    console.log(`  Flashcards Client ID: ${cognitoOutputs.FlashcardsClientId}`);
-    console.log(`  Identity Pool ID: ${cognitoOutputs.IdentityPoolId}`);
-    console.log(`  Auth Domain: ${cognitoOutputs.UserPoolDomainUrl}`);
+    console.log(`   User Pool ID: ${cognitoOutputs.UserPoolId}`);
+    console.log(`   Flashcards Client ID: ${cognitoOutputs.FlashcardsClientId}`);
+    console.log(`   Identity Pool ID: ${cognitoOutputs.IdentityPoolId}`);
+    console.log(`   Auth Domain: ${cognitoOutputs.UserPoolDomainUrl}`);
   } else {
-    console.log("\n⏭️  Skipping Cognito deployment (dev stage uses Cognito prefix domain)");
+    console.log("\n⏭️  Skipping Cognito deployment (dev stage uses prefix domain)\n");
   }
 
-  console.log("\n✅ Shared infrastructure deployment complete!\n");
-  console.log("Next steps:");
-  console.log("  1. Deploy individual apps (flashcards, invoices, etc.)");
-  console.log("  2. Each app will use the shared certificate and Cognito");
+  // Step 3: Deploy DynamoDB table for business apps (CRM, Invoice, Job Timer)
+  console.log("─".repeat(60));
+  console.log("Step 3: Business Apps DynamoDB Table (ap-southeast-2)");
+  console.log("─".repeat(60) + "\n");
+
+  const dynamodbTemplatePath = path.join(templateDir, "dynamodb.yaml");
+  if (!existsSync(dynamodbTemplatePath)) {
+    throw new Error(`Template not found: ${dynamodbTemplatePath}`);
+  }
+
+  const dynamodbTemplateUrl = await uploadTemplate(
+    s3Main,
+    templateBucketName,
+    dynamodbTemplatePath,
+    `shared-infra/${stage}/dynamodb.yaml`
+  );
+
+  const dynamodbOutputs = await deployStack(
+    cfnMain,
+    `super-simple-apps-business-db-${stage}`,
+    dynamodbTemplateUrl,
+    [
+      { ParameterKey: "Stage", ParameterValue: stage },
+    ],
+    cfnRoleArn
+  );
+
+  console.log("\n✓ DynamoDB Outputs:");
+  console.log(`   Table Name: ${dynamodbOutputs.TableName}`);
+  console.log(`   Table ARN: ${dynamodbOutputs.TableArn}`);
+
+  console.log("\n" + "=".repeat(60));
+  console.log("  ✅ Shared infrastructure deployment complete!");
+  console.log("=".repeat(60));
+  console.log("\nNext steps:");
+  console.log("  yarn deploy:all:prod   # Deploy all apps");
+  console.log("  yarn deploy:landing:prod   # Deploy just the landing page");
+  console.log("");
 }
 
 // Main entry point

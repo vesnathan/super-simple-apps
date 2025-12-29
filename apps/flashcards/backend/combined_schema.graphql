@@ -1,0 +1,156 @@
+# Base schema with shared types and scalars
+
+scalar AWSDateTime
+scalar AWSTimestamp
+
+type Card @aws_iam @aws_cognito_user_pools {
+  id: ID!
+  question: String!
+  answer: String!
+  cardType: String              # 'text' or 'multiple-choice', defaults to 'text'
+  options: [String!]            # 3 options for multiple choice
+  correctOptionIndex: Int       # 0, 1, or 2 - index of correct option
+  explanation: String           # Explanation shown after answer
+  imageUrl: String              # Optional image URL displayed on the card
+  researchUrl: String           # Optional link to more information
+}
+
+input CardInput {
+  id: ID!
+  question: String!
+  answer: String!
+  cardType: String
+  options: [String!]
+  correctOptionIndex: Int
+  explanation: String
+  imageUrl: String
+  researchUrl: String
+}
+
+input UpdateCardInput {
+  question: String
+  answer: String
+  cardType: String
+  options: [String!]
+  correctOptionIndex: Int
+  explanation: String
+  imageUrl: String
+  researchUrl: String
+}
+
+# Deck types and operations
+
+type Deck @aws_iam @aws_cognito_user_pools {
+  id: ID!
+  userId: ID!
+  title: String!
+  description: String
+  tags: [String!]
+  cards: [Card!]!
+  cardCount: Int!
+  isPublic: Boolean!
+  views: Int!
+  createdAt: AWSDateTime!
+  lastModified: AWSTimestamp!
+  researchUrl: String
+}
+
+input CreateDeckInput {
+  id: ID!
+  title: String!
+  cards: [CardInput!]
+  isPublic: Boolean
+}
+
+input SyncDeckInput {
+  id: ID!
+  title: String!
+  cards: [CardInput!]!
+  isPublic: Boolean
+  createdAt: AWSDateTime
+  lastModified: AWSTimestamp
+}
+
+input UpdateDeckInput {
+  title: String
+  isPublic: Boolean
+}
+
+type SyncResult @aws_cognito_user_pools {
+  success: Boolean!
+  syncedCount: Int!
+}
+
+type PublicDecksResult @aws_iam @aws_cognito_user_pools {
+  decks: [Deck!]!
+  nextToken: String
+}
+
+
+type DeleteDeckResult @aws_cognito_user_pools {
+  success: Boolean!
+  deletedId: ID!
+}
+
+type IncrementViewsResult @aws_iam @aws_cognito_user_pools {
+  success: Boolean!
+  views: Int!
+}
+
+input ReportCardInput {
+  deckId: ID!
+  cardId: ID!
+  reason: String!
+}
+
+type ReportCardResult @aws_iam @aws_cognito_user_pools {
+  success: Boolean!
+}
+
+
+# Report types and operations for admin functionality
+
+type Report @aws_cognito_user_pools {
+  id: ID!
+  deckId: ID!
+  cardId: ID!
+  reason: String!
+  status: String!
+  createdAt: AWSDateTime!
+}
+
+type ReportsResult @aws_cognito_user_pools {
+  reports: [Report!]!
+  nextToken: String
+}
+
+type UpdateReportResult @aws_cognito_user_pools {
+  success: Boolean!
+  report: Report
+}
+
+
+
+
+type Query {
+  publicDecks: [Deck!]! @aws_iam @aws_cognito_user_pools
+  searchPublicDecks(search: String, limit: Int, nextToken: String): PublicDecksResult! @aws_iam @aws_cognito_user_pools
+  popularDecks(limit: Int): [Deck!]! @aws_iam @aws_cognito_user_pools
+  myDecks: [Deck!]! @aws_cognito_user_pools
+  getDeck(id: ID!): Deck @aws_iam @aws_cognito_user_pools
+  getDecksByIds(ids: [ID!]!): [Deck!]! @aws_iam @aws_cognito_user_pools
+  # Get all pending reports (admin only - protected at frontend level)
+  pendingReports(limit: Int): ReportsResult! @aws_cognito_user_pools
+}
+
+type Mutation {
+  createDeck(input: CreateDeckInput!): Deck! @aws_cognito_user_pools
+  syncDecks(decks: [SyncDeckInput!]!): SyncResult! @aws_cognito_user_pools
+  updateCard(deckId: ID!, cardId: ID!, input: UpdateCardInput!): Deck! @aws_cognito_user_pools
+  updateDeck(deckId: ID!, input: UpdateDeckInput!): Deck! @aws_cognito_user_pools
+  deleteDeck(deckId: ID!): DeleteDeckResult! @aws_cognito_user_pools
+  incrementDeckViews(deckId: ID!): IncrementViewsResult! @aws_iam @aws_cognito_user_pools
+  reportCard(input: ReportCardInput!): ReportCardResult! @aws_iam @aws_cognito_user_pools
+  # Update report status (resolve or dismiss)
+  updateReportStatus(reportId: ID!, deckId: ID!, cardId: ID!, status: String!): UpdateReportResult! @aws_cognito_user_pools
+}

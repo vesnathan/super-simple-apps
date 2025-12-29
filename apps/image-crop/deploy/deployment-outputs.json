@@ -1,0 +1,9 @@
+{
+  "DeployRoleArn": "arn:aws:iam::430118819356:role/ssa-super-simple-image-crop-deploy-role-prod",
+  "WebsiteBucket": "super-simple-image-crop-prod",
+  "CustomDomain": "crop.super-simple-apps.com",
+  "CloudFrontDistributionId": "E39FOSNAFL4JA4",
+  "WebsiteUrl": "https://crop.super-simple-apps.com",
+  "WebsiteBucketArn": "arn:aws:s3:::super-simple-image-crop-prod",
+  "CloudFrontDomainName": "d12581m6twpuu2.cloudfront.net"
+}

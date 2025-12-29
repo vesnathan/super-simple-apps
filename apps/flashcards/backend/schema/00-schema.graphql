@@ -1,0 +1,39 @@
+# Base schema with shared types and scalars
+
+scalar AWSDateTime
+scalar AWSTimestamp
+
+type Card @aws_iam @aws_cognito_user_pools {
+  id: ID!
+  question: String!
+  answer: String!
+  cardType: String              # 'text' or 'multiple-choice', defaults to 'text'
+  options: [String!]            # 3 options for multiple choice
+  correctOptionIndex: Int       # 0, 1, or 2 - index of correct option
+  explanation: String           # Explanation shown after answer
+  imageUrl: String              # Optional image URL displayed on the card
+  researchUrl: String           # Optional link to more information
+}
+
+input CardInput {
+  id: ID!
+  question: String!
+  answer: String!
+  cardType: String
+  options: [String!]
+  correctOptionIndex: Int
+  explanation: String
+  imageUrl: String
+  researchUrl: String
+}
+
+input UpdateCardInput {
+  question: String
+  answer: String
+  cardType: String
+  options: [String!]
+  correctOptionIndex: Int
+  explanation: String
+  imageUrl: String
+  researchUrl: String
+}

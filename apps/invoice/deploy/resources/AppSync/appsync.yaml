@@ -1,0 +1,259 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Super Simple Invoice AppSync Resources"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+  AppName:
+    Type: String
+    Description: Application Name
+    Default: invoice
+  DataTableName:
+    Type: String
+    Description: DynamoDB table name for application data
+  TemplateBucketName:
+    Type: String
+    Description: S3 bucket containing templates and resolvers
+  ResolversBuildHash:
+    Type: String
+    Description: Build hash used to version resolver S3 keys
+  SchemaHash:
+    Type: String
+    Description: Content hash of GraphQL schema for versioning
+  LogRetentionInDays:
+    Type: Number
+    Description: Number of days to retain CloudWatch Logs
+    Default: 14
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+
+Resources:
+  # IAM Role for AppSync to access DynamoDB
+  AppSyncDynamoDBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-appsync-dynamodb-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AppName}-appsync-dynamodb-policy-${Stage}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DataTableName}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DataTableName}/index/*"
+      Tags:
+        - Key: Project
+          Value: super-simple-invoice
+        - Key: Stage
+          Value: !Ref Stage
+
+  # IAM Role for AppSync CloudWatch Logging
+  AppSyncLoggingServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-appsync-logging-role-${Stage}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AppName}-appsync-logging-policy-${Stage}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - Key: Project
+          Value: super-simple-invoice
+        - Key: Stage
+          Value: !Ref Stage
+
+  # AppSync GraphQL API
+  GraphQlApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub "${AppName}-appsync-api-${Stage}"
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      UserPoolConfig:
+        UserPoolId: !Ref UserPoolId
+        DefaultAction: ALLOW
+        AwsRegion: !Ref AWS::Region
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: AWS_IAM
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt AppSyncLoggingServiceRole.Arn
+        FieldLogLevel: ALL
+        ExcludeVerboseContent: false
+      Tags:
+        - Key: Project
+          Value: super-simple-invoice
+        - Key: Stage
+          Value: !Ref Stage
+
+  # GraphQL Schema
+  GraphQlSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      DefinitionS3Location: !Sub "s3://${TemplateBucketName}/invoice/schema-${SchemaHash}.graphql"
+
+  # DynamoDB Data Source
+  MainTableDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      Name: !Sub "${AppName}MainTableDynamoDBDataSource"
+      Type: AMAZON_DYNAMODB
+      DynamoDBConfig:
+        TableName: !Ref DataTableName
+        AwsRegion: !Ref AWS::Region
+      ServiceRoleArn: !GetAtt AppSyncDynamoDBRole.Arn
+
+  # ============================================
+  # Query Resolvers
+  # ============================================
+
+  # Query.getInvoice - Gets a single invoice by ID
+  GetInvoiceResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQlSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      TypeName: Query
+      FieldName: getInvoice
+      DataSourceName: !GetAtt MainTableDataSource.Name
+      Kind: UNIT
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      CodeS3Location: !Sub "s3://${TemplateBucketName}/invoice/resolvers/${Stage}/${ResolversBuildHash}/invoices/Queries/Query.getInvoice.js"
+
+  # Query.listInvoices - Lists all invoices for the authenticated user
+  ListInvoicesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQlSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      TypeName: Query
+      FieldName: listInvoices
+      DataSourceName: !GetAtt MainTableDataSource.Name
+      Kind: UNIT
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      CodeS3Location: !Sub "s3://${TemplateBucketName}/invoice/resolvers/${Stage}/${ResolversBuildHash}/invoices/Queries/Query.listInvoices.js"
+
+  # ============================================
+  # Mutation Resolvers
+  # ============================================
+
+  # Mutation.createInvoice - Creates a new invoice
+  CreateInvoiceResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQlSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      TypeName: Mutation
+      FieldName: createInvoice
+      DataSourceName: !GetAtt MainTableDataSource.Name
+      Kind: UNIT
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      CodeS3Location: !Sub "s3://${TemplateBucketName}/invoice/resolvers/${Stage}/${ResolversBuildHash}/invoices/Mutations/Mutation.createInvoice.js"
+
+  # Mutation.updateInvoice - Updates an existing invoice
+  UpdateInvoiceResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQlSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      TypeName: Mutation
+      FieldName: updateInvoice
+      DataSourceName: !GetAtt MainTableDataSource.Name
+      Kind: UNIT
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      CodeS3Location: !Sub "s3://${TemplateBucketName}/invoice/resolvers/${Stage}/${ResolversBuildHash}/invoices/Mutations/Mutation.updateInvoice.js"
+
+  # Mutation.deleteInvoice - Deletes an invoice
+  DeleteInvoiceResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQlSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteInvoice
+      DataSourceName: !GetAtt MainTableDataSource.Name
+      Kind: UNIT
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      CodeS3Location: !Sub "s3://${TemplateBucketName}/invoice/resolvers/${Stage}/${ResolversBuildHash}/invoices/Mutations/Mutation.deleteInvoice.js"
+
+  # Mutation.syncInvoices - Bulk syncs invoices from local to cloud
+  SyncInvoicesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: GraphQlSchema
+    Properties:
+      ApiId: !GetAtt GraphQlApi.ApiId
+      TypeName: Mutation
+      FieldName: syncInvoices
+      DataSourceName: !GetAtt MainTableDataSource.Name
+      Kind: UNIT
+      Runtime:
+        Name: APPSYNC_JS
+        RuntimeVersion: 1.0.0
+      CodeS3Location: !Sub "s3://${TemplateBucketName}/invoice/resolvers/${Stage}/${ResolversBuildHash}/invoices/Mutations/Mutation.syncInvoices.js"
+
+Outputs:
+  AppSyncApiUrl:
+    Value: !GetAtt GraphQlApi.GraphQLUrl
+    Description: "GraphQL URL for the AppSync API"
+    Export:
+      Name: !Sub "SuperSimpleInvoice-AppSyncApiUrl-${Stage}"
+
+  AppSyncRealtimeUrl:
+    Value: !GetAtt GraphQlApi.RealtimeUrl
+    Description: "Realtime URL for the AppSync API"
+    Export:
+      Name: !Sub "SuperSimpleInvoice-AppSyncRealtimeUrl-${Stage}"
+
+  AppSyncApiId:
+    Value: !GetAtt GraphQlApi.ApiId
+    Description: "API ID for the AppSync API"
+    Export:
+      Name: !Sub "SuperSimpleInvoice-AppSyncApiId-${Stage}"
+
+  AppSyncLogGroupName:
+    Description: Name of the AppSync CloudWatch LogGroup
+    Value: !Sub "/aws/appsync/apis/${GraphQlApi.ApiId}"

@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DNS and SSL Certificate for Super Simple Apps Image Annotate"
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+  DomainName:
+    Type: String
+    Description: Domain name (e.g., annotate.super-simple-apps.com)
+    Default: ""
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID
+    Default: ""
+  CloudFrontDomainName:
+    Type: String
+    Description: CloudFront distribution domain name
+    Default: ""
+
+Conditions:
+  IsProd: !Equals [!Ref Stage, "prod"]
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  HasCloudFrontDomain: !Not [!Equals [!Ref CloudFrontDomainName, ""]]
+  CreateCertificate: !And
+    - !Condition IsProd
+    - !Condition HasDomain
+  CreateDNSRecords: !And
+    - !Condition IsProd
+    - !Condition HasDomain
+    - !Condition HasCloudFrontDomain
+
+Resources:
+  ACMCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateCertificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub "${DomainName}-certificate"
+        - Key: Stage
+          Value: !Ref Stage
+        - Key: Project
+          Value: super-simple-apps-image-annotate
+
+  CloudFrontAliasRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDNSRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !Ref CloudFrontDomainName
+        EvaluateTargetHealth: false
+
+Outputs:
+  CertificateArn:
+    Description: "ARN of the ACM certificate"
+    Value: !If
+      - CreateCertificate
+      - !Ref ACMCertificate
+      - ""
+
+  DomainName:
+    Description: "Primary domain name"
+    Value: !If
+      - CreateCertificate
+      - !Ref DomainName
+      - ""

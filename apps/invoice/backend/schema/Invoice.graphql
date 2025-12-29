@@ -1,0 +1,156 @@
+# Invoice Status Enum
+enum InvoiceStatus {
+  draft
+  sent
+  viewed
+  paid
+  overdue
+  cancelled
+}
+
+# Line Item Type
+type LineItem {
+  id: ID!
+  description: String!
+  quantity: Float!
+  unitPrice: Float!
+  amount: Float!
+  timerSessionId: String
+}
+
+# Invoice Type
+type Invoice {
+  id: ID!
+  invoiceNumber: String!
+
+  # Client info (denormalized for offline use)
+  clientId: String
+  clientName: String!
+  clientEmail: String
+  clientAddress: String
+
+  # Invoice details
+  issueDate: AWSTimestamp!
+  dueDate: AWSTimestamp!
+  status: InvoiceStatus!
+
+  # Line items
+  lineItems: [LineItem!]!
+
+  # Totals
+  subtotal: Float!
+  taxRate: Float
+  taxAmount: Float
+  total: Float!
+
+  # Additional info
+  notes: String
+  paymentTerms: String
+
+  # Metadata
+  userId: String!
+  createdAt: AWSTimestamp!
+  updatedAt: AWSTimestamp!
+  syncedAt: AWSTimestamp
+
+  # Status timestamps
+  sentAt: AWSTimestamp
+  viewedAt: AWSTimestamp
+  paidAt: AWSTimestamp
+}
+
+# Connection type for pagination
+type InvoiceConnection {
+  items: [Invoice!]!
+  nextToken: String
+}
+
+# Line Item Input
+input LineItemInput {
+  id: ID!
+  description: String!
+  quantity: Float!
+  unitPrice: Float!
+  amount: Float!
+  timerSessionId: String
+}
+
+# Create Invoice Input
+input CreateInvoiceInput {
+  id: ID
+  invoiceNumber: String
+  clientId: String
+  clientName: String!
+  clientEmail: String
+  clientAddress: String
+  issueDate: AWSTimestamp!
+  dueDate: AWSTimestamp!
+  status: InvoiceStatus
+  lineItems: [LineItemInput!]!
+  subtotal: Float
+  taxRate: Float
+  taxAmount: Float
+  total: Float
+  notes: String
+  paymentTerms: String
+  createdAt: AWSTimestamp
+  updatedAt: AWSTimestamp
+  sentAt: AWSTimestamp
+  viewedAt: AWSTimestamp
+  paidAt: AWSTimestamp
+}
+
+# Update Invoice Input
+input UpdateInvoiceInput {
+  id: ID!
+  invoiceNumber: String
+  clientId: String
+  clientName: String
+  clientEmail: String
+  clientAddress: String
+  issueDate: AWSTimestamp
+  dueDate: AWSTimestamp
+  status: InvoiceStatus
+  lineItems: [LineItemInput!]
+  subtotal: Float
+  taxRate: Float
+  taxAmount: Float
+  total: Float
+  notes: String
+  paymentTerms: String
+  sentAt: AWSTimestamp
+  viewedAt: AWSTimestamp
+  paidAt: AWSTimestamp
+}
+
+# Sync Invoice Input (for bulk sync from local)
+input SyncInvoiceInput {
+  id: ID!
+  invoiceNumber: String!
+  clientId: String
+  clientName: String!
+  clientEmail: String
+  clientAddress: String
+  issueDate: AWSTimestamp!
+  dueDate: AWSTimestamp!
+  status: InvoiceStatus!
+  lineItems: [LineItemInput!]!
+  subtotal: Float!
+  taxRate: Float
+  taxAmount: Float
+  total: Float!
+  notes: String
+  paymentTerms: String
+  createdAt: AWSTimestamp!
+  updatedAt: AWSTimestamp!
+  sentAt: AWSTimestamp
+  viewedAt: AWSTimestamp
+  paidAt: AWSTimestamp
+}
+
+# Sync Result
+type SyncResult {
+  synced: Int!
+  failed: Int!
+  invoices: [Invoice!]!
+}
