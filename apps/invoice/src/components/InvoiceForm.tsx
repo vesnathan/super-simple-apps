@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useEffect } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@nextui-org/react";
-import { CreateInvoiceInput, LineItem, Invoice } from "@/types";
+import {
+  CreateInvoiceInput,
+  LineItem,
+  Invoice,
+  InvoiceFormSchema,
+  InvoiceFormInput,
+} from "@/types";
 
 interface InvoiceFormProps {
   invoice?: Invoice;
@@ -13,13 +21,6 @@ interface InvoiceFormProps {
     defaultPaymentTerms?: string;
     currencySymbol?: string;
   };
-}
-
-interface LineItemInput {
-  id: string;
-  description: string;
-  quantity: string;
-  unitPrice: string;
 }
 
 function generateTempId(): string {
@@ -38,103 +39,72 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
   const currencySymbol = settings?.currencySymbol || "$";
   const isEditing = !!invoice;
 
-  const [clientName, setClientName] = useState(invoice?.clientName || "");
-  const [clientEmail, setClientEmail] = useState(invoice?.clientEmail || "");
-  const [clientAddress, setClientAddress] = useState(invoice?.clientAddress || "");
-  const [issueDate, setIssueDate] = useState(
-    formatDateForInput(invoice?.issueDate || Date.now())
-  );
-  const [dueDate, setDueDate] = useState(
-    formatDateForInput(invoice?.dueDate || Date.now() + 30 * 24 * 60 * 60 * 1000)
-  );
-  const [taxRate, setTaxRate] = useState(
-    String(invoice?.taxRate ?? settings?.defaultTaxRate ?? 0)
-  );
-  const [notes, setNotes] = useState(invoice?.notes || "");
-  const [paymentTerms, setPaymentTerms] = useState(
-    invoice?.paymentTerms || settings?.defaultPaymentTerms || ""
-  );
-
-  const [lineItems, setLineItems] = useState<LineItemInput[]>(() => {
-    if (invoice?.lineItems && invoice.lineItems.length > 0) {
-      return invoice.lineItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        quantity: String(item.quantity),
-        unitPrice: String(item.unitPrice),
-      }));
-    }
-    return [{ id: generateTempId(), description: "", quantity: "1", unitPrice: "" }];
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<InvoiceFormInput>({
+    resolver: zodResolver(InvoiceFormSchema),
+    defaultValues: {
+      clientName: "",
+      clientEmail: "",
+      clientAddress: "",
+      issueDate: formatDateForInput(Date.now()),
+      dueDate: formatDateForInput(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      taxRate: String(settings?.defaultTaxRate ?? 0),
+      notes: "",
+      paymentTerms: settings?.defaultPaymentTerms || "",
+      lineItems: [{ id: generateTempId(), description: "", quantity: "1", unitPrice: "" }],
+    },
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "lineItems",
+  });
 
-  const addLineItem = useCallback(() => {
-    setLineItems((prev) => [
-      ...prev,
-      { id: generateTempId(), description: "", quantity: "1", unitPrice: "" },
-    ]);
-  }, []);
+  const watchedLineItems = watch("lineItems");
+  const watchedTaxRate = watch("taxRate");
 
-  const removeLineItem = useCallback((id: string) => {
-    setLineItems((prev) => {
-      if (prev.length === 1) return prev;
-      return prev.filter((item) => item.id !== id);
-    });
-  }, []);
+  useEffect(() => {
+    if (invoice) {
+      reset({
+        clientName: invoice.clientName,
+        clientEmail: invoice.clientEmail || "",
+        clientAddress: invoice.clientAddress || "",
+        issueDate: formatDateForInput(invoice.issueDate),
+        dueDate: formatDateForInput(invoice.dueDate),
+        taxRate: String(invoice.taxRate ?? settings?.defaultTaxRate ?? 0),
+        notes: invoice.notes || "",
+        paymentTerms: invoice.paymentTerms || settings?.defaultPaymentTerms || "",
+        lineItems: invoice.lineItems.map((item) => ({
+          id: item.id,
+          description: item.description,
+          quantity: String(item.quantity),
+          unitPrice: String(item.unitPrice),
+        })),
+      });
+    }
+  }, [invoice, reset, settings]);
 
-  const updateLineItem = useCallback(
-    (id: string, field: keyof LineItemInput, value: string) => {
-      setLineItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-      );
-    },
-    []
-  );
-
-  const calculateLineItemAmount = (item: LineItemInput): number => {
+  const calculateLineItemAmount = (item: { quantity: string; unitPrice: string }): number => {
     const qty = parseFloat(item.quantity) || 0;
     const price = parseFloat(item.unitPrice) || 0;
     return Math.round(qty * price * 100) / 100;
   };
 
-  const subtotal = lineItems.reduce((sum, item) => sum + calculateLineItemAmount(item), 0);
-  const taxAmount = Math.round(subtotal * (parseFloat(taxRate) || 0) / 100 * 100) / 100;
+  const subtotal = watchedLineItems?.reduce(
+    (sum, item) => sum + calculateLineItemAmount(item),
+    0
+  ) ?? 0;
+  const taxAmount = Math.round((subtotal * (parseFloat(watchedTaxRate || "0") || 0)) / 100 * 100) / 100;
   const total = Math.round((subtotal + taxAmount) * 100) / 100;
 
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!clientName.trim()) {
-      newErrors.clientName = "Client name is required";
-    }
-
-    if (!issueDate) {
-      newErrors.issueDate = "Issue date is required";
-    }
-
-    if (!dueDate) {
-      newErrors.dueDate = "Due date is required";
-    }
-
-    const validLineItems = lineItems.filter(
-      (item) => item.description.trim() && parseFloat(item.unitPrice) > 0
-    );
-
-    if (validLineItems.length === 0) {
-      newErrors.lineItems = "At least one line item with description and price is required";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validate()) return;
-
-    const validLineItems: Omit<LineItem, "amount">[] = lineItems
+  const onFormSubmit = (data: InvoiceFormInput) => {
+    const validLineItems: Omit<LineItem, "amount">[] = data.lineItems
       .filter((item) => item.description.trim() && parseFloat(item.unitPrice) > 0)
       .map((item) => ({
         id: item.id,
@@ -143,21 +113,29 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
         unitPrice: parseFloat(item.unitPrice) || 0,
       }));
 
+    if (validLineItems.length === 0) {
+      return;
+    }
+
     onSubmit({
-      clientName: clientName.trim(),
-      clientEmail: clientEmail.trim(),
-      clientAddress: clientAddress.trim(),
-      issueDate: parseDateToTimestamp(issueDate),
-      dueDate: parseDateToTimestamp(dueDate),
+      clientName: data.clientName.trim(),
+      clientEmail: data.clientEmail?.trim() || undefined,
+      clientAddress: data.clientAddress?.trim() || undefined,
+      issueDate: parseDateToTimestamp(data.issueDate),
+      dueDate: parseDateToTimestamp(data.dueDate),
       lineItems: validLineItems as LineItem[],
-      taxRate: parseFloat(taxRate) || undefined,
-      notes: notes.trim(),
-      paymentTerms: paymentTerms.trim(),
+      taxRate: parseFloat(data.taxRate || "0") || undefined,
+      notes: data.notes?.trim() || undefined,
+      paymentTerms: data.paymentTerms?.trim() || undefined,
     });
   };
 
+  const addLineItem = () => {
+    append({ id: generateTempId(), description: "", quantity: "1", unitPrice: "" });
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
       {/* Client Information */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
@@ -171,8 +149,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
             <input
               id="clientName"
               type="text"
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
+              {...register("clientName")}
               className={cn(
                 "w-full px-3 py-2 border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500",
                 errors.clientName ? "border-red-500" : "border-gray-300"
@@ -180,7 +157,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
               placeholder="Enter client name"
             />
             {errors.clientName && (
-              <p className="mt-1 text-sm text-red-500">{errors.clientName}</p>
+              <p className="mt-1 text-sm text-red-500">{errors.clientName.message}</p>
             )}
           </div>
           <div>
@@ -190,11 +167,13 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
             <input
               id="clientEmail"
               type="email"
-              value={clientEmail}
-              onChange={(e) => setClientEmail(e.target.value)}
+              {...register("clientEmail")}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="client@example.com"
             />
+            {errors.clientEmail && (
+              <p className="mt-1 text-sm text-red-500">{errors.clientEmail.message}</p>
+            )}
           </div>
         </div>
         <div>
@@ -203,8 +182,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
           </label>
           <textarea
             id="clientAddress"
-            value={clientAddress}
-            onChange={(e) => setClientAddress(e.target.value)}
+            {...register("clientAddress")}
             rows={2}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
             placeholder="Enter client address"
@@ -225,15 +203,14 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
             <input
               id="issueDate"
               type="date"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
+              {...register("issueDate")}
               className={cn(
                 "w-full px-3 py-2 border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500",
                 errors.issueDate ? "border-red-500" : "border-gray-300"
               )}
             />
             {errors.issueDate && (
-              <p className="mt-1 text-sm text-red-500">{errors.issueDate}</p>
+              <p className="mt-1 text-sm text-red-500">{errors.issueDate.message}</p>
             )}
           </div>
           <div>
@@ -243,15 +220,14 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
             <input
               id="dueDate"
               type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              {...register("dueDate")}
               className={cn(
                 "w-full px-3 py-2 border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500",
                 errors.dueDate ? "border-red-500" : "border-gray-300"
               )}
             />
             {errors.dueDate && (
-              <p className="mt-1 text-sm text-red-500">{errors.dueDate}</p>
+              <p className="mt-1 text-sm text-red-500">{errors.dueDate.message}</p>
             )}
           </div>
         </div>
@@ -276,7 +252,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
         </div>
 
         {errors.lineItems && (
-          <p className="text-sm text-red-500">{errors.lineItems}</p>
+          <p className="text-sm text-red-500">{errors.lineItems.message}</p>
         )}
 
         <div className="space-y-3">
@@ -289,17 +265,16 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
             <div className="col-span-1"></div>
           </div>
 
-          {lineItems.map((item, index) => (
+          {fields.map((field, index) => (
             <div
-              key={item.id}
+              key={field.id}
               className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded-lg"
             >
               <div className="col-span-12 md:col-span-5">
                 <label className="md:hidden text-xs text-gray-500 mb-1 block">Description</label>
                 <input
                   type="text"
-                  value={item.description}
-                  onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                  {...register(`lineItems.${index}.description`)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="Service or product description"
                 />
@@ -308,8 +283,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
                 <label className="md:hidden text-xs text-gray-500 mb-1 block">Qty</label>
                 <input
                   type="number"
-                  value={item.quantity}
-                  onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
+                  {...register(`lineItems.${index}.quantity`)}
                   min="0.01"
                   step="0.01"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm text-right focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -323,8 +297,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
                   </span>
                   <input
                     type="number"
-                    value={item.unitPrice}
-                    onChange={(e) => updateLineItem(item.id, "unitPrice", e.target.value)}
+                    {...register(`lineItems.${index}.unitPrice`)}
                     min="0"
                     step="0.01"
                     className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm text-right focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -334,15 +307,16 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
               </div>
               <div className="col-span-3 md:col-span-2 flex items-center justify-end">
                 <span className="text-sm font-medium text-gray-900 py-2">
-                  {currencySymbol}{calculateLineItemAmount(item).toFixed(2)}
+                  {currencySymbol}
+                  {calculateLineItemAmount(watchedLineItems?.[index] || { quantity: "0", unitPrice: "0" }).toFixed(2)}
                 </span>
               </div>
               <div className="col-span-1 flex items-center justify-end">
                 <button
                   type="button"
-                  onClick={() => removeLineItem(item.id)}
+                  onClick={() => remove(index)}
                   className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                  disabled={lineItems.length === 1}
+                  disabled={fields.length === 1}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -370,15 +344,14 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
             <input
               id="taxRate"
               type="number"
-              value={taxRate}
-              onChange={(e) => setTaxRate(e.target.value)}
+              {...register("taxRate")}
               min="0"
               max="100"
               step="0.1"
               className="w-20 px-2 py-1 border border-gray-300 rounded text-gray-900 text-sm text-right focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
-          {parseFloat(taxRate) > 0 && (
+          {parseFloat(watchedTaxRate || "0") > 0 && (
             <div className="flex items-center gap-4 text-sm">
               <span className="text-gray-600">Tax:</span>
               <span className="font-medium text-gray-900 w-24 text-right">
@@ -403,8 +376,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
           </label>
           <textarea
             id="notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            {...register("notes")}
             rows={2}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
             placeholder="Additional notes or instructions"
@@ -417,8 +389,7 @@ export function InvoiceForm({ invoice, onSubmit, onCancel, settings }: InvoiceFo
           <input
             id="paymentTerms"
             type="text"
-            value={paymentTerms}
-            onChange={(e) => setPaymentTerms(e.target.value)}
+            {...register("paymentTerms")}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
             placeholder="e.g., Net 30, Due on receipt"
           />

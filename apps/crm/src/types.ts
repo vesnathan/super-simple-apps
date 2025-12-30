@@ -31,6 +31,20 @@ export const CreateClientSchema = ClientSchema.omit({
 
 export type CreateClientInput = z.infer<typeof CreateClientSchema>;
 
+// Form schema with string tags input (for React Hook Form)
+export const ClientFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  company: z.string().optional(),
+  address: z.string().optional(),
+  notes: z.string().optional(),
+  hourlyRate: z.string().optional(),
+  tagsInput: z.string().optional(),
+});
+
+export type ClientFormInput = z.infer<typeof ClientFormSchema>;
+
 // For updating clients
 export const UpdateClientSchema = ClientSchema.partial().required({ id: true });
 

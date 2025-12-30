@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export interface TimerSession {
   id: string;
   startTime: number; // timestamp
@@ -20,3 +22,10 @@ export interface JobTimerState {
   activeJobId: string | null;
   activeSessionId: string | null;
 }
+
+// Form validation schemas
+export const JobNameSchema = z.object({
+  name: z.string().min(1, "Job name is required").max(100, "Job name must be 100 characters or less"),
+});
+
+export type JobNameInput = z.infer<typeof JobNameSchema>;

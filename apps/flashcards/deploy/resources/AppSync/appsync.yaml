@@ -63,7 +63,7 @@ Resources:
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DataTableName}/index/*"
       Tags:
         - Key: Project
-          Value: simple-flashcards
+          Value: super-simple-apps-flashcards
 
   # IAM Role for AppSync CloudWatch Logging
   AppSyncLoggingServiceRole:
@@ -90,7 +90,7 @@ Resources:
                 Resource: "*"
       Tags:
         - Key: Project
-          Value: simple-flashcards
+          Value: super-simple-apps-flashcards
 
   # AppSync GraphQL API
   GraphQlApi:
@@ -110,7 +110,7 @@ Resources:
         ExcludeVerboseContent: false
       Tags:
         - Key: Project
-          Value: simple-flashcards
+          Value: super-simple-apps-flashcards
 
   # GraphQL Schema
   GraphQlSchema:

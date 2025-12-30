@@ -200,7 +200,7 @@ async function createDynamoDBTable() {
 
 // Add zipDirectory function
 async function zipDirectory(sourcePath: string, outPath: string) {
-  const zip = new (JSZip as any)();
+  const zip = new JSZip();
   const entries = await readdir(sourcePath, { withFileTypes: true });
 
   for (const entry of entries) {

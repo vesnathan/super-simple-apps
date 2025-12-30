@@ -9,7 +9,7 @@ Parameters:
   AppName:
     Type: String
     Description: Application name
-    Default: simple-flashcards
+    Default: super-simple-apps-flashcards
   S3Bucket:
     Type: String
     Description: S3 bucket containing Lambda code

@@ -49,7 +49,7 @@ async function cleanupDynamoDB() {
         }
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("✗ Error cleaning up DynamoDB:", error);
   }
 }

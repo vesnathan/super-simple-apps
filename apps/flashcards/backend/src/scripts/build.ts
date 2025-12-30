@@ -6,7 +6,7 @@ import esbuild from "esbuild";
 import JSZip from "jszip";
 
 async function zipDirectory(sourcePath: string, outPath: string) {
-  const zip = new (JSZip as any)(); // Type assertion to handle constructor
+  const zip = new JSZip();
   const entries = await readdir(sourcePath, { withFileTypes: true });
 
   for (const entry of entries) {

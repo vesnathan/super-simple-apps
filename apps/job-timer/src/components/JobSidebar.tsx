@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, LocalBadge } from "@super-simple-apps/shared-assets";
-import { Job } from "@/types";
+import { Job, JobNameSchema, JobNameInput } from "@/types";
 
 interface JobSidebarProps {
   jobs: Job[];
@@ -38,19 +40,32 @@ export function JobSidebarContent({
   getTotalTimeForJob,
 }: JobSidebarProps) {
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<JobNameInput>({
+    resolver: zodResolver(JobNameSchema),
+  });
 
   const handleStartEdit = (job: Job) => {
     setEditingJobId(job.id);
-    setEditingName(job.name);
+    reset({ name: job.name });
   };
 
-  const handleSaveEdit = () => {
-    if (editingJobId && editingName.trim()) {
-      onRenameJob(editingJobId, editingName.trim());
+  const handleSaveEdit = (data: JobNameInput) => {
+    if (editingJobId) {
+      onRenameJob(editingJobId, data.name);
     }
     setEditingJobId(null);
-    setEditingName("");
+    reset({ name: "" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingJobId(null);
+    reset({ name: "" });
   };
 
   return (
@@ -77,20 +92,24 @@ export function JobSidebarContent({
               onClick={() => onSelectJob(job.id)}
             >
               {editingJobId === job.id ? (
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                <form
+                  className="flex gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onSubmit={handleSubmit(handleSaveEdit)}
+                >
                   <input
                     type="text"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    className="flex-1 px-2 py-1 bg-white border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    {...register("name")}
+                    className={`flex-1 px-2 py-1 bg-white border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                      errors.name ? "border-red-500" : "border-gray-300"
+                    }`}
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSaveEdit();
-                      if (e.key === "Escape") setEditingJobId(null);
+                      if (e.key === "Escape") handleCancelEdit();
                     }}
-                    onBlur={handleSaveEdit}
+                    onBlur={handleSubmit(handleSaveEdit)}
                   />
-                </div>
+                </form>
               ) : (
                 <div className="flex items-center gap-3">
                   <div
@@ -163,55 +182,67 @@ interface JobSidebarActionsProps {
 }
 
 export function JobSidebarActions({ onCreateJob }: JobSidebarActionsProps) {
-  const [newJobName, setNewJobName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateJob = () => {
-    if (newJobName.trim()) {
-      onCreateJob(newJobName.trim());
-      setNewJobName("");
-      setIsCreating(false);
-    }
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isValid },
+  } = useForm<JobNameInput>({
+    resolver: zodResolver(JobNameSchema),
+    mode: "onChange",
+  });
+
+  const handleCreateJob = (data: JobNameInput) => {
+    onCreateJob(data.name);
+    reset();
+    setIsCreating(false);
+  };
+
+  const handleCancel = () => {
+    setIsCreating(false);
+    reset();
   };
 
   if (isCreating) {
     return (
-      <div className="space-y-2">
-        <input
-          type="text"
-          value={newJobName}
-          onChange={(e) => setNewJobName(e.target.value)}
-          placeholder="Job name..."
-          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleCreateJob();
-            if (e.key === "Escape") {
-              setIsCreating(false);
-              setNewJobName("");
-            }
-          }}
-        />
+      <form onSubmit={handleSubmit(handleCreateJob)} className="space-y-2">
+        <div>
+          <input
+            type="text"
+            {...register("name")}
+            placeholder="Job name..."
+            className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+              errors.name ? "border-red-500" : "border-gray-200"
+            }`}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Escape") handleCancel();
+            }}
+          />
+          {errors.name && (
+            <p className="mt-1 text-xs text-red-500">{errors.name.message}</p>
+          )}
+        </div>
         <div className="flex gap-2">
           <Button
-            onClick={handleCreateJob}
-            disabled={!newJobName.trim()}
+            type="submit"
+            disabled={!isValid}
             variant="primary"
             className="flex-1"
           >
             Create
           </Button>
           <Button
-            onClick={() => {
-              setIsCreating(false);
-              setNewJobName("");
-            }}
+            type="button"
+            onClick={handleCancel}
             variant="secondary"
           >
             Cancel
           </Button>
         </div>
-      </div>
+      </form>
     );
   }
 

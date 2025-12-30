@@ -62,7 +62,7 @@ program
 const options = program.opts();
 const STAGE = options.stage || process.env.STAGE || "dev";
 const REGION = process.env.AWS_REGION || "ap-southeast-2";
-const APP_NAME = "super-simple-flashcards";
+const APP_NAME = "super-simple-apps-flashcards";
 const TEMPLATE_BUCKET = "ssa-deploy-templates"; // Shared template bucket
 const CFN_ROLE_ARN = `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || "430118819356"}:role/ssa-cloudformation-role`;
 const DEBUG_MODE = options.debug || false;

@@ -73,28 +73,28 @@ const APPS = {
     type: "static",
     appDir: path.resolve(__dirname, "../apps/landing"),
     subdomain: "", // root domain
-    appName: "super-simple-landing",
+    appName: "super-simple-apps-landing",
   },
   "image-crop": {
     name: "Image Crop",
     type: "static",
     appDir: path.resolve(__dirname, "../apps/image-crop"),
     subdomain: "crop",
-    appName: "super-simple-image-crop",
+    appName: "super-simple-apps-image-crop",
   },
   "image-resize": {
     name: "Image Resize",
     type: "static",
     appDir: path.resolve(__dirname, "../apps/image-resize"),
     subdomain: "resize",
-    appName: "super-simple-image-resize",
+    appName: "super-simple-apps-image-resize",
   },
   "image-annotate": {
     name: "Image Annotate",
     type: "static",
     appDir: path.resolve(__dirname, "../apps/image-annotate"),
     subdomain: "annotate",
-    appName: "super-simple-image-annotate",
+    appName: "super-simple-apps-image-annotate",
   },
   "job-timer": {
     name: "Job Timer",

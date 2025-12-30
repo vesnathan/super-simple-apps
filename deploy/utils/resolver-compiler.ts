@@ -1387,16 +1387,99 @@ class ResolverCompiler {
 
     // Add global declarations for AppSync runtime
     // NOTE: util and runtime are global objects provided by AppSync runtime, not TypeScript types
-    // Context and identity types use `any` for intentional type simplification in compiled resolvers
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // These are minimal type stubs to satisfy TypeScript compilation of resolvers
     const appsyncGlobals = `// AppSync runtime globals (provided by AppSync, declared for TypeScript)
-declare const util: any; // AppSync runtime global
-declare const runtime: any; // AppSync runtime global
-type Context<TArguments = any, TSource = any, TStash = any, TResult = any, TReturns = any> = any; // Simplified for compiled resolvers
-type AppSyncIdentityCognito = any; // Simplified for compiled resolvers
-type AppSyncIdentityIAM = any; // Simplified for compiled resolvers
-type AppSyncIdentityOIDC = any; // Simplified for compiled resolvers
-type AppSyncIdentityLambda = any; // Simplified for compiled resolvers
+interface AppSyncUtil {
+  autoId(): string;
+  autoKsuid(): string;
+  autoUlid(): string;
+  error(message: string, errorType?: string, data?: unknown, errorInfo?: unknown): never;
+  appendError(message: string, errorType?: string, data?: unknown, errorInfo?: unknown): void;
+  validate(condition: boolean, message: string, errorType?: string): void;
+  isNull(value: unknown): boolean;
+  isNullOrEmpty(value: unknown): boolean;
+  isNullOrBlank(value: unknown): boolean;
+  defaultIfNull<T>(value: T | null | undefined, defaultValue: T): T;
+  defaultIfNullOrEmpty<T>(value: T | null | undefined, defaultValue: T): T;
+  defaultIfNullOrBlank<T>(value: T | null | undefined, defaultValue: T): T;
+  matches(pattern: string, value: string): boolean;
+  authType(): string;
+  time: {
+    nowISO8601(): string;
+    nowEpochSeconds(): number;
+    nowEpochMilliSeconds(): number;
+    nowFormatted(format: string, timezone?: string): string;
+    parseFormattedToEpochMilliSeconds(dateTime: string, format: string, timezone?: string): number;
+    parseISO8601ToEpochMilliSeconds(dateTime: string): number;
+    epochMilliSecondsToSeconds(epochMillis: number): number;
+    epochMilliSecondsToISO8601(epochMillis: number): string;
+    epochMilliSecondsToFormatted(epochMillis: number, format: string, timezone?: string): string;
+  };
+  dynamodb: {
+    toDynamoDB(value: unknown): Record<string, unknown>;
+    toMapValues(values: Record<string, unknown>): Record<string, unknown>;
+    toMapValuesJson(values: string): Record<string, unknown>;
+    toS3ObjectJson(s3Object: { bucket: string; key: string; region?: string; version?: string }): string;
+    fromS3ObjectJson(s3ObjectJson: string): { bucket: string; key: string; region?: string; version?: string };
+  };
+  str: {
+    toUpper(value: string): string;
+    toLower(value: string): string;
+    toReplace(value: string, search: string, replacement: string): string;
+    normalize(value: string, form: string): string;
+  };
+  math: {
+    roundNum(value: number): number;
+    minVal(values: number[]): number;
+    maxVal(values: number[]): number;
+    randomDouble(): number;
+    randomWithinRange(min: number, max: number): number;
+  };
+  xml: {
+    toMap(xml: string): Record<string, unknown>;
+    toJsonString(xml: string): string;
+  };
+  transform: {
+    toDynamoDBConditionExpression(condition: Record<string, unknown>): { expression: string; expressionNames: Record<string, string>; expressionValues: Record<string, unknown> };
+    toDynamoDBFilterExpression(filter: Record<string, unknown>): { expression: string; expressionNames: Record<string, string>; expressionValues: Record<string, unknown> };
+  };
+}
+declare const util: AppSyncUtil;
+interface AppSyncRuntime {
+  earlyReturn<T>(result: T): T;
+}
+declare const runtime: AppSyncRuntime;
+interface AppSyncIdentity {
+  sub?: string;
+  issuer?: string;
+  username?: string;
+  claims?: Record<string, unknown>;
+  sourceIp?: string[];
+  defaultAuthStrategy?: string;
+  groups?: string[] | null;
+  accountId?: string;
+  cognitoIdentityPoolId?: string;
+  cognitoIdentityId?: string;
+  userArn?: string;
+  cognitoIdentityAuthType?: string;
+  cognitoIdentityAuthProvider?: string;
+}
+interface Context<TArguments = Record<string, unknown>, TSource = Record<string, unknown> | null, TStash = Record<string, unknown>, TResult = unknown> {
+  arguments: TArguments;
+  args: TArguments;
+  source: TSource;
+  stash: TStash;
+  result: TResult;
+  prev: { result: TResult };
+  identity?: AppSyncIdentity | null;
+  request: { headers: Record<string, string>; domainName?: string };
+  info: { fieldName: string; parentTypeName: string; variables: Record<string, unknown>; selectionSetList: string[]; selectionSetGraphQL: string };
+  error?: { message: string; type: string };
+}
+type AppSyncIdentityCognito = AppSyncIdentity;
+type AppSyncIdentityIAM = AppSyncIdentity;
+type AppSyncIdentityOIDC = AppSyncIdentity;
+type AppSyncIdentityLambda = AppSyncIdentity;
 
 `;
     codeToCompile = appsyncGlobals + codeToCompile;

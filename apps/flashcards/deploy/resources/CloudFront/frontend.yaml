@@ -9,7 +9,7 @@ Parameters:
   AppName:
     Type: String
     Description: Application name
-    Default: super-simple-flashcards
+    Default: super-simple-apps-flashcards
   DomainName:
     Type: String
     Description: Custom domain name (e.g., flashcards.super-simple-apps.com)

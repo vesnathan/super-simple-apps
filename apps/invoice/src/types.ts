@@ -81,6 +81,29 @@ export const CreateInvoiceInputSchema = InvoiceSchema.omit({
 });
 export type CreateInvoiceInput = z.infer<typeof CreateInvoiceInputSchema>;
 
+// Form-specific line item schema (with string inputs for form handling)
+export const LineItemFormSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  quantity: z.string(),
+  unitPrice: z.string(),
+});
+export type LineItemFormInput = z.infer<typeof LineItemFormSchema>;
+
+// Form schema for React Hook Form (with string inputs)
+export const InvoiceFormSchema = z.object({
+  clientName: z.string().min(1, "Client name is required"),
+  clientEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  clientAddress: z.string().optional(),
+  issueDate: z.string().min(1, "Issue date is required"),
+  dueDate: z.string().min(1, "Due date is required"),
+  taxRate: z.string().optional(),
+  notes: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  lineItems: z.array(LineItemFormSchema).min(1, "At least one line item is required"),
+});
+export type InvoiceFormInput = z.infer<typeof InvoiceFormSchema>;
+
 // Update invoice input
 export const UpdateInvoiceInputSchema = InvoiceSchema.partial().required({ id: true });
 export type UpdateInvoiceInput = z.infer<typeof UpdateInvoiceInputSchema>;
