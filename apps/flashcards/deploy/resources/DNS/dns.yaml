@@ -50,7 +50,7 @@ Resources:
         - Key: Stage
           Value: !Ref Stage
         - Key: Project
-          Value: simple-flashcards
+          Value: super-simple-apps-flashcards
 
   # Route53 A Record pointing to CloudFront
   CloudFrontAliasRecord:

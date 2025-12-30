@@ -9,7 +9,7 @@ Parameters:
   AppName:
     Type: String
     Description: Application name
-    Default: simple-flashcards
+    Default: super-simple-apps-flashcards
   GetPublicDecksFunctionArn:
     Type: String
     Description: ARN of GetPublicDecks function
