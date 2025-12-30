@@ -26,11 +26,12 @@ export const iamService = {
       console.log("Found existing role:", roleName);
 
       return existingRole.Role?.Arn;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Only proceed with creation if role doesn't exist
-      if (error.name !== "NoSuchEntity") {
+      if (error instanceof Error && error.name !== "NoSuchEntity") {
         throw error;
       }
+      if (!(error instanceof Error)) throw error;
     }
 
     try {
@@ -104,8 +105,8 @@ export const iamService = {
       await new Promise((resolve) => setTimeout(resolve, 10000));
 
       return Role.Arn;
-    } catch (error: any) {
-      if (error.name === "EntityAlreadyExists") {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "EntityAlreadyExists") {
         // Double check to get the ARN if role was created in between our checks
         const existingRole = await iam.send(
           new GetRoleCommand({ RoleName: roleName }),

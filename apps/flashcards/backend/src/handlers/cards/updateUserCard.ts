@@ -4,6 +4,7 @@ import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb";
 
 import { verifyToken } from "../../utils/auth";
 import { corsHeaders } from "../../utils/cors";
+import type { Card } from "../../data/decks/types";
 
 const ddb = DynamoDBDocument.from(new DynamoDB({}));
 const TABLE_NAME = process.env.DECKS_TABLE || "";
@@ -45,7 +46,7 @@ export const handler = async (
     // Find and update the specific card
     const updatedDeck = {
       ...deck.Item,
-      cards: deck.Item.cards.map((card: any) =>
+      cards: deck.Item.cards.map((card: Card) =>
         card.id === cardId ? { ...card, ...updates } : card,
       ),
       lastModified: Date.now(),

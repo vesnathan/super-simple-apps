@@ -72,8 +72,9 @@ export const dynamodbService = {
         console.log(`Table ${CONFIG.DECKS_TABLE} already exists`);
 
         return false;
-      } catch (error: any) {
-        if (error.name !== "ResourceNotFoundException") throw error;
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name !== "ResourceNotFoundException") throw error;
+        if (!(error instanceof Error)) throw error;
       }
 
       // Table doesn't exist, create it
@@ -99,7 +100,7 @@ export const dynamodbService = {
       await this.waitForTable();
 
       return true; // Indicate new table was created
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to create table:", error);
       throw error;
     }
@@ -113,8 +114,8 @@ export const dynamodbService = {
         }),
       );
       console.log(`Table ${CONFIG.DECKS_TABLE} deleted successfully`);
-    } catch (error: any) {
-      if (error.name === "ResourceNotFoundException") {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "ResourceNotFoundException") {
         console.log(`Table ${CONFIG.DECKS_TABLE} does not exist`);
 
         return;
